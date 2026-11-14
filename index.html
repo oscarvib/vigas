@@ -40,7 +40,7 @@
   th{background:#f5f8fb;font-weight:600;color:var(--mut)}
   .tables{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:6px 22px}
   .tables h4{margin:10px 0 2px;font-size:.92rem}
-  .eq{font-family:"Cambria Math","Times New Roman",serif;font-size:1.02rem;background:#f7f9fc;border-left:3px solid var(--pri);padding:8px 12px;margin:6px 0;border-radius:4px;overflow-x:auto;white-space:nowrap}
+  .eq{font-family:"Cambria Math","Times New Roman",serif;font-size:1.02rem;background:#f7f9fc;border-left:3px solid var(--pri);padding:8px 12px;margin:6px 0;border-radius:4px;overflow-x:auto;white-space:normal}
   .note{font-size:.88rem;color:var(--mut)}
   .warn{background:#fff3e0;border-left:4px solid #ef6c00;padding:8px 12px;border-radius:4px;margin:8px 0}
   .ok{color:var(--grn);font-weight:600}
@@ -127,6 +127,7 @@
         <div id="solSteps"></div>
         <h3>Reacciones</h3>
         <div id="solReac"></div>
+        <div id="solQwrap"><h3>Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia abajo)</span></h3><div id="solQ"></div></div>
         <h3>Diagrama de esfuerzos cortantes V(x)</h3>
         <div id="solV"></div>
         <h3>Diagrama de momentos flectores M(x)</h3>
@@ -227,20 +228,22 @@ function solve(S) {
 // Leyes V(x), M(x) por tramos como polinomios en x global
 function buildLaws(S, sol) {
   const forces = [], couples = [];
-  sol.reactions.forEach(r => { forces.push({ x: r.x, F: r.R }); if (r.type === 'fixed') couples.push({ x: r.x, C: -r.M }); });
-  S.points.forEach(p => forces.push({ x: p.x, F: -p.P }));
-  S.moments.forEach(m => couples.push({ x: m.x, C: m.C }));
+  const lt = i => String.fromCharCode(65 + i);
+  sol.reactions.forEach((r, i) => { forces.push({ x: r.x, F: r.R, n: `R<sub>${lt(i)}</sub>` }); if (r.type === 'fixed') couples.push({ x: r.x, C: -r.M, n: `M<sub>${lt(i)}</sub>` }); });
+  S.points.forEach((p, i) => forces.push({ x: p.x, F: -p.P, n: `P<sub>${i + 1}</sub>` }));
+  S.moments.forEach((m, i) => couples.push({ x: m.x, C: m.C, n: `M<sub>${i + 1}</sub>` }));
   const dists = validDists(S).map(d => ({ ...d, ...resultant(d) }));
   const segs = [], nodes = sol.nodes;
   for (let k = 0; k < nodes.length - 1; k++) {
     const x1 = nodes[k], x2 = nodes[k + 1], xm = (x1 + x2) / 2;
-    let V = [0], M = [0];
+    let V = [0], M = [0], Q = [0];
     for (const f of forces) if (f.x < xm) { V = padd(V, [f.F]); M = padd(M, [-f.F * f.x, f.F]); }
     for (const c of couples) if (c.x < xm) M = padd(M, [c.C]);
     for (const d of dists) {
       if (d.a >= xm) continue;
       const { alpha: al, beta: be, a } = d;
       if (d.b > xm) {
+        Q = padd(Q, [al, be]);
         V = psub(V, [-al * a - be * a * a / 2, al, be / 2]);
         M = psub(M, [al * a * a / 2 + be * a ** 3 / 3, -al * a - be * a * a / 2, al / 2, be / 6]);
       } else {
@@ -248,7 +251,7 @@ function buildLaws(S, sol) {
       }
     }
     const clean = p => p.map(v => Math.abs(v) < 1e-10 ? 0 : v);
-    segs.push({ x1, x2, V: clean(V), M: clean(M) });
+    segs.push({ x1, x2, Q: clean(Q), V: clean(V), M: clean(M) });
   }
   return { segs, forces, couples, dists };
 }
@@ -512,7 +515,7 @@ function plot(segs, which, L, nodes, extremes) {
   g += `<path d="${path}Z" fill="${upCol}" fill-opacity=".16" clip-path="url(#${id}u)"/><path d="${path}Z" fill="${dnCol}" fill-opacity=".16" clip-path="url(#${id}d)"/>`;
   g += `<path d="${path}" fill="none" stroke="#263238" stroke-width="2"/>`;
   g += `<line x1="${X(0) - 10}" y1="${y0}" x2="${X(L) + 10}" y2="${y0}" stroke="#37474f" stroke-width="1.4"/>`;
-  g += `<text x="${X(0) - 12}" y="${y0 + 4}" text-anchor="end" font-size="13" font-weight="700" fill="#37474f">${which === 'V' ? 'V (kN)' : 'M (kN·m)'}</text>`;
+  g += `<text x="${X(0) - 12}" y="${y0 + 4}" text-anchor="end" font-size="13" font-weight="700" fill="#37474f">${({ Q: 'q (kN/m)', V: 'V (kN)', M: 'M (kN·m)' })[which]}</text>`;
   const lab = (x, v, anchor, dx) => {
     const pv = sgn * v, y = pv >= 0 ? Y(v) - 7 : Y(v) + 17;
     g += `<text x="${X(x) + dx}" y="${y}" text-anchor="${anchor}" font-size="13" font-weight="600" fill="${v >= 0 ? cPos : cNeg}" class="halo">${fmt(v)}</text>`;
@@ -609,6 +612,8 @@ function renderSolution() {
   const cand = { V: [], M: [...mExt] };
   segs.forEach(s => ['V', 'M'].forEach(w => { cand[w].push({ x: s.x1, v: pev(s[w], s.x1) }, { x: s.x2, v: pev(s[w], s.x2) }); }));
   const best = (arr, f) => arr.reduce((a, b) => f(b.v) > f(a.v) ? b : a, arr[0]);
+  $('solQwrap').hidden = !dists.length;
+  if (dists.length) $('solQ').innerHTML = plot(segs, 'Q', S.L, sol.nodes, []);
   $('solV').innerHTML = plot(segs, 'V', S.L, sol.nodes, []);
   $('solM').innerHTML = plot(segs, 'M', S.L, sol.nodes, mExt.filter(e => Math.abs(e.v) > 1e-6));
   const vM = best(cand.V, v => v), vm = best(cand.V, v => -v), mM = best(cand.M, v => v), mm = best(cand.M, v => -v);
@@ -622,9 +627,22 @@ function renderSolution() {
     <tr><td><b>|M| máximo (dimensionado)</b></td><td>${fmt(Math.abs(absM.v))} kN·m</td><td>x = ${fmt(absM.x)} m</td></tr></table>
     ${mExt.length ? `<div class="note">Los puntos naranjas del diagrama de momentos son extremos relativos dentro de un tramo: allí V(x) = 0 (porque dM/dx = V).</div>` : ''}`;
 
-  $('solLaws').innerHTML = `<table><tr><th>Tramo</th><th>Intervalo (m)</th><th>V(x) (kN)</th><th>M(x) (kN·m)</th></tr>` +
-    segs.map((s, k) => `<tr><td>${k + 1}</td><td>${fmt(s.x1)} &lt; x &lt; ${fmt(s.x2)}</td><td class="eqc">V = ${fmtPoly(s.V)}</td><td class="eqc">M = ${fmtPoly(s.M)}</td></tr>`).join('') +
-    `</table><div class="note">x medida desde el extremo izquierdo. Los tramos cambian en cada apoyo, carga, momento o inicio/fin de carga distribuida.</div>`;
+  const near = (x, y) => Math.abs(x - y) < 1e-6;
+  const acts = x => {
+    const t = forces.filter(f => near(f.x, x) && Math.abs(f.F) > 1e-9).map(f => `${f.n} = ${fmt(Math.abs(f.F))} kN ${f.F >= 0 ? '↑' : '↓'} <span class="note">⇒ ΔV = ${f.F >= 0 ? '+' : ''}${fmt(f.F)}</span>`)
+      .concat(couples.filter(c => near(c.x, x) && Math.abs(c.C) > 1e-9).map(c => `${c.n} = ${fmt(Math.abs(c.C))} kN·m ${c.C >= 0 ? '↻' : '↺'} <span class="note">⇒ ΔM = ${c.C >= 0 ? '+' : ''}${fmt(c.C)}</span>`));
+    return t.length ? t.join('<br>') : '<span class="note">—</span>';
+  };
+  const nodesL = sol.nodes;
+  const pder = p => p.slice(1).map((c, i) => c * (i + 1));
+  const ks = segs.findIndex(sg => sg.Q.some(c => Math.abs(c) > 1e-9)), kx = ks >= 0 ? ks : 0, sx = segs[kx];
+  const ej = `<div class="eq">Ejemplo, tramo ${kx + 1}: &nbsp; dV/dx = d(${fmtPoly(sx.V)})/dx = ${fmtPoly(pder(sx.V).length ? pder(sx.V) : [0])} = −q &nbsp;&nbsp;·&nbsp;&nbsp; dM/dx = d(${fmtPoly(sx.M)})/dx = ${fmtPoly(pder(sx.M).length ? pder(sx.M) : [0])} = V</div>`;
+  $('solLaws').innerHTML = `<div class="eq">q(x) &nbsp;—( V = −∫q dx )→&nbsp; V(x) &nbsp;—( M = ∫V dx )→&nbsp; M(x) &nbsp;&nbsp;⟺&nbsp;&nbsp; dV/dx = −q, &nbsp; dM/dx = V</div>
+    <div class="eq">Cargas puntuales: una fuerza F produce un salto ΔV = F en el cortante; un momento C produce un salto ΔM = C en el flector.</div>
+    <table><tr><th>Tramo</th><th>Intervalo (m)</th><th>Cargas puntuales al inicio del tramo<br><span class="note">(saltos)</span></th><th>q(x) (kN/m)</th><th>V(x) (kN)<br><span class="note">dV/dx = −q</span></th><th>M(x) (kN·m)<br><span class="note">dM/dx = V</span></th></tr>` +
+    segs.map((s, k) => `<tr><td>${k + 1}</td><td>${fmt(s.x1)} &lt; x &lt; ${fmt(s.x2)}</td><td>x = ${fmt(s.x1)}:<br>${acts(s.x1)}</td><td>q = ${fmtPoly(s.Q)}</td><td>V = ${fmtPoly(s.V)}</td><td>M = ${fmtPoly(s.M)}</td></tr>`).join('') +
+    `<tr><td>fin</td><td>x = ${fmt(S.L)}</td><td>x = ${fmt(S.L)}:<br>${acts(nodesL[nodesL.length - 1])}</td><td colspan="3" class="note">Tras la última carga V y M deben volver a 0 (equilibrio).</td></tr>` +
+    `</table>` + ej + `<div class="note">x medida desde el extremo izquierdo de la viga.</div>`;
 }
 
 function update() {
