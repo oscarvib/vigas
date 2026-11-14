@@ -1,0 +1,16 @@
+{
+  "name": "Vigas · Cortantes y Flectores",
+  "short_name": "Vigas",
+  "description": "Generador y solucionador de problemas de vigas: reacciones, esfuerzos cortantes y momentos flectores.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f5f9",
+  "theme_color": "#1f4e79",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
