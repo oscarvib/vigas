@@ -90,7 +90,7 @@
 <header>
   <img src="icons/icon-192.png" alt="">
   <h1>Vigas · Diagramas de esfuerzos cortantes y momentos flectores</h1>
-  <span id="ver" style="font-size:.85rem;opacity:.85">v2.5 · 14-11-2026</span>
+  <span id="ver" style="font-size:.85rem;opacity:.85">v2.6 · 14-11-2026</span>
   <button id="installBtn" hidden>⬇ Instalar app</button>
   <button id="printBtn" class="noprint">🖨 Imprimir</button>
 </header>
@@ -119,7 +119,7 @@
       <div class="fld">
         <label>Nº de cargas puntuales (fuerzas)</label>
         <select id="nP"></select>
-        <label class="note"><input type="checkbox" id="upP"> permitir alguna hacia arriba</label>
+        <label class="note"><input type="checkbox" id="upP"> permitir alguna hacia arriba (positiva)</label>
       </div>
       <div class="fld">
         <label>Nº de momentos puntuales</label>
@@ -128,7 +128,7 @@
       <div class="fld">
         <label>Nº de cargas distribuidas y tipo</label>
         <select id="nQ"></select>
-        <label class="note"><input type="checkbox" id="upQ"> permitir alguna hacia arriba (negativa)</label>
+        <label class="note"><input type="checkbox" id="upQ"> permitir alguna hacia arriba (positiva)</label>
         <div class="sub" id="qTypes"></div>
       </div>
     </div>
@@ -150,10 +150,10 @@
     <h2>Criterio de signos</h2>
     <ul id="critList">
       <li><b>x</b> se mide desde el extremo izquierdo de la viga. Unidades: kN y m.</li>
-      <li><b>Cargas puntuales P</b> y <b>distribuidas q</b>: positivas hacia abajo (↓, en azul), negativas hacia arriba (↑, en naranja).</li>
+      <li><b>Cargas puntuales P</b> y <b>distribuidas q</b>: criterio del eje y hacia arriba → <b>positivas hacia arriba</b> (↑, en naranja) y <b>negativas hacia abajo</b> (↓, en azul). Una carga de 10 kN/m hacia abajo es q = −10.</li>
       <li><b>Momentos aplicados</b>: positivos en sentido horario (↻), negativos antihorario (↺).</li>
       <li><b>Cortante V(x)</b>: suma de las fuerzas verticales a la izquierda de la sección (positivas hacia arriba).</li>
-      <li><b>Flector M(x)</b>: suma de momentos respecto a la sección de lo que está a su izquierda; positivo si tracciona la fibra inferior (la viga se “sonríe”). Se cumple dM/dx = V y dV/dx = −q.</li>
+      <li><b>Flector M(x)</b>: suma de momentos respecto a la sección de lo que está a su izquierda; positivo si tracciona la fibra inferior (la viga se “sonríe”). Se cumple dV/dx = q y dM/dx = V.</li>
       <li>Las vigas hiperestáticas se resuelven con el método de rigidez (EI constante, que no influye en las reacciones). Solo se consideran cargas verticales: la reacción horizontal es nula.</li>
     </ul>
   </section>
@@ -176,7 +176,7 @@
         <details class="sec" data-g="diag" open><summary><h3>Diagrama de sólido libre</h3></summary><div id="solFbd"></div></details>
         <details class="sec" open><summary><h3>Planteamiento y ecuaciones de equilibrio</h3></summary><div id="solSteps"></div></details>
         <details class="sec" open><summary><h3>Reacciones</h3></summary><div id="solReac"></div></details>
-        <details class="sec" data-g="diag" id="solQwrap" open><summary><h3>Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia abajo)</span></h3></summary><div id="solQ"></div></details>
+        <details class="sec" data-g="diag" id="solQwrap" open><summary><h3>Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia arriba)</span></h3></summary><div id="solQ"></div></details>
         <details class="sec" data-g="diag" open><summary><h3>Diagrama de esfuerzos cortantes V(x)</h3></summary><div id="solV"></div></details>
         <details class="sec" data-g="diag" open><summary><h3>Diagrama de momentos flectores M(x)</h3></summary><div id="solM"></div></details>
         <details class="sec" open><summary><h3>Valores máximos</h3></summary><div id="solExt"></div></details>
@@ -322,7 +322,7 @@ function buildLaws(S, sol) {
       if (d.a >= xm) continue;
       const { alpha: al, beta: be, a } = d;
       if (d.b > xm) {
-        Q = padd(Q, [al, be]);
+        Q = psub(Q, [al, be]);          // q(x) mostrada: + hacia arriba
         V = psub(V, [-al * a - be * a * a / 2, al, be / 2]);
         M = psub(M, [al * a * a / 2 + be * a ** 3 / 3, -al * a - be * a * a / 2, al / 2, be / 6]);
       } else {
@@ -453,15 +453,15 @@ function renderTables() {
   h += `<div><h4>Apoyos</h4><table><tr><th></th><th>Tipo</th><th>x (m)</th><th></th></tr>` +
     S.supports.map((s, i) => `<tr><td><b>${LET[i]}</b></td><td>${sTypeSel(i, s.type)}</td><td>${numIn(`supports.${i}.x`, s.x)}</td><td>${del('supports.' + i)}</td></tr>`).join('') +
     `</table><button class="mini sec" data-add="supports">+ apoyo</button></div>`;
-  h += `<div><h4>Cargas puntuales (+ hacia abajo)</h4><table><tr><th></th><th>x (m)</th><th>P (kN)</th><th></th></tr>` +
-    S.points.map((p, i) => `<tr><td><b>P${i + 1}</b></td><td>${numIn(`points.${i}.x`, p.x)}</td><td>${numIn(`points.${i}.P`, p.P, 1)}</td><td>${del('points.' + i)}</td></tr>`).join('') +
+  h += `<div><h4>Cargas puntuales (+ hacia arriba ↑, − hacia abajo ↓)</h4><table><tr><th></th><th>x (m)</th><th>P (kN)</th><th></th></tr>` +
+    S.points.map((p, i) => `<tr><td><b>P${i + 1}</b></td><td>${numIn(`points.${i}.x`, p.x)}</td><td>${numIn(`points.${i}.P`, -p.P, 1)}</td><td>${del('points.' + i)}</td></tr>`).join('') +
     `</table><button class="mini sec" data-add="points">+ carga</button></div>`;
   h += `<div><h4>Momentos puntuales (+ horario ↻)</h4><table><tr><th></th><th>x (m)</th><th>M (kN·m)</th><th></th></tr>` +
     S.moments.map((m, i) => `<tr><td><b>M${i + 1}</b></td><td>${numIn(`moments.${i}.x`, m.x)}</td><td>${numIn(`moments.${i}.C`, m.C, 1)}</td><td>${del('moments.' + i)}</td></tr>`).join('') +
     `</table><button class="mini sec" data-add="moments">+ momento</button></div>`;
-  h += `<div style="grid-column:1/-1"><h4>Cargas distribuidas (+ hacia abajo)</h4><table><tr><th></th><th>Tipo</th><th>desde (m)</th><th>hasta (m)</th><th>q inicio</th><th>q fin</th><th></th></tr>` +
-    S.dists.map((d, i) => `<tr><td><b>q${i + 1}</b></td><td>${qTypeSel(i, d.type)}</td><td>${numIn(`dists.${i}.a`, d.a)}</td><td>${numIn(`dists.${i}.b`, d.b)}</td><td>${numIn(`dists.${i}.q1`, d.q1, 1)}</td><td>${numIn(`dists.${i}.q2`, d.q2, 1)}</td><td>${del('dists.' + i)}</td></tr>`).join('') +
-    `</table><div class="note">q en kN/m · positiva ↓ hacia abajo, negativa ↑ hacia arriba</div><button class="mini sec" data-add="dists">+ distribuida</button></div>`;
+  h += `<div style="grid-column:1/-1"><h4>Cargas distribuidas (+ hacia arriba ↑, − hacia abajo ↓)</h4><table><tr><th></th><th>Tipo</th><th>desde (m)</th><th>hasta (m)</th><th>q inicio</th><th>q fin</th><th></th></tr>` +
+    S.dists.map((d, i) => `<tr><td><b>q${i + 1}</b></td><td>${qTypeSel(i, d.type)}</td><td>${numIn(`dists.${i}.a`, d.a)}</td><td>${numIn(`dists.${i}.b`, d.b)}</td><td>${numIn(`dists.${i}.q1`, -d.q1, 1)}</td><td>${numIn(`dists.${i}.q2`, -d.q2, 1)}</td><td>${del('dists.' + i)}</td></tr>`).join('') +
+    `</table><div class="note">q en kN/m · positiva ↑ hacia arriba, negativa ↓ hacia abajo</div><button class="mini sec" data-add="dists">+ distribuida</button></div>`;
   $('dataTables').innerHTML = h + '</div>';
 }
 function normalize(editedKey) {
@@ -484,6 +484,7 @@ $('dataTables').addEventListener('change', e => {
   for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
   const last = parts[parts.length - 1];
   o[last] = e.target.tagName === 'SELECT' ? e.target.value : parseFloat(e.target.value);
+  if (['P', 'q1', 'q2'].includes(last)) o[last] = -o[last];   // pantalla: + hacia arriba; interno: + hacia abajo
   normalize(k); renderTables(); update();
 });
 $('dataTables').addEventListener('click', e => {
@@ -526,7 +527,7 @@ function drawBeam(S, reactions) {
         : `<line x1="${x}" y1="${base - 1}" x2="${x}" y2="${base - h}" stroke="#e65100" stroke-width="1.4" marker-end="url(#ah-org)"/>`;
     }
     const arrow = q => q > 0 ? '↓' : (q < 0 ? '↑' : '');
-    const lbl = Math.abs(d.q1 - d.q2) < 1e-9 ? `q${d.i + 1} = ${fmt(Math.abs(d.q1))} kN/m ${arrow(d.q1)}` : `q${d.i + 1}: ${fmt(d.q1)} → ${fmt(d.q2)} kN/m`;
+    const lbl = Math.abs(d.q1 - d.q2) < 1e-9 ? `q${d.i + 1} = ${fmt(Math.abs(d.q1))} kN/m ${arrow(d.q1)}` : `q${d.i + 1}: ${fmt(-d.q1)} → ${fmt(-d.q2)} kN/m`;
     const allUp = d.q1 <= 0 && d.q2 <= 0;
     g += `<text x="${(xa + xb) / 2}" y="${base - Math.max(H(d.q1), H(d.q2)) - 7}" text-anchor="middle" font-size="14" fill="${allUp ? '#bf360c' : '#0d47a1'}" class="halo">${lbl}</text>`;
   });
@@ -600,7 +601,7 @@ function plot(segs, which, L, nodes, extremes) {
   const Y = v => top + (vmax - sgn * v) / (vmax - vmin) * (H - top - bot), y0 = Y(0);
   const scale = Math.max(Math.abs(vmax), Math.abs(vmin));
   const path = pts.map((p, i) => (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ',' + Y(p[1]).toFixed(1)).join('');
-  const id = 'c' + (++clipId), cPos = '#1565c0', cNeg = '#c62828';
+  const id = 'c' + (++clipId), cPos = which === 'Q' ? '#e65100' : '#1565c0', cNeg = which === 'Q' ? '#1565c0' : '#c62828';
   const upCol = sgn > 0 ? cPos : cNeg, dnCol = sgn > 0 ? cNeg : cPos;
   let g = `<defs><clipPath id="${id}u"><rect x="0" y="0" width="${W}" height="${y0}"/></clipPath><clipPath id="${id}d"><rect x="0" y="${y0}" width="${W}" height="${H}"/></clipPath></defs>`;
   nodes.forEach(x => g += `<line x1="${X(x)}" y1="${top - 10}" x2="${X(x)}" y2="${H - bot + 6}" stroke="#cfd8dc" stroke-dasharray="4 4"/>`);
@@ -663,7 +664,7 @@ function renderSolution() {
   if (dists.length) {
     st += `<h3>Paso 1 · Resultantes de las cargas distribuidas</h3><table><tr><th></th><th>Tipo</th><th>Resultante Q (kN)</th><th>Sentido</th><th>Posición x̄ (m)</th></tr>` +
       dists.map(d => `<tr><td><b>Q${d.i + 1}</b></td><td>${QTYPES[d.type] || ''}</td><td>${fmt(Math.abs(d.W))}</td><td>${d.W > 1e-9 ? '↓ hacia abajo' : (d.W < -1e-9 ? '↑ hacia arriba' : '—')}</td><td>${Math.abs(d.W) > 1e-9 ? fmt(d.xc) : '—'}</td></tr>`).join('') + `</table>
-      <div class="note">Uniforme: Q = q·a, en el centro. Triangular: Q = q·a/2, a 1/3 del lado mayor. Trapezoidal: suma de rectángulo + triángulo. Una q negativa actúa hacia arriba y su resultante también.</div>`;
+      <div class="note">Uniforme: Q = q·a, en el centro. Triangular: Q = q·a/2, a 1/3 del lado mayor. Trapezoidal: suma de rectángulo + triángulo. Con el criterio de signos, una q negativa actúa hacia abajo y una positiva hacia arriba.</div>`;
   }
   const D = [...S.points.map((p, i) => ({ n: `P<sub>${i + 1}</sub>`, D: p.P, x: p.x })), ...dists.map(d => ({ n: `Q<sub>${d.i + 1}</sub>`, D: d.W, x: d.xc }))];
   const C = S.moments.map((m, i) => ({ n: `M<sub>${i + 1}</sub>`, C: m.C }));
@@ -728,10 +729,10 @@ function renderSolution() {
   const nodesL = sol.nodes;
   const pder = p => p.slice(1).map((c, i) => c * (i + 1));
   const ks = segs.findIndex(sg => sg.Q.some(c => Math.abs(c) > 1e-9)), kx = ks >= 0 ? ks : 0, sx = segs[kx];
-  const ej = `<div class="eq">Ejemplo, tramo ${kx + 1}: &nbsp; dV/dx = d(${fmtPoly(sx.V)})/dx = ${fmtPoly(pder(sx.V).length ? pder(sx.V) : [0])} = −q &nbsp;&nbsp;·&nbsp;&nbsp; dM/dx = d(${fmtPoly(sx.M)})/dx = ${fmtPoly(pder(sx.M).length ? pder(sx.M) : [0])} = V</div>`;
-  $('solLaws').innerHTML = `<div class="eq">q(x) &nbsp;—( V = −∫q dx )→&nbsp; V(x) &nbsp;—( M = ∫V dx )→&nbsp; M(x) &nbsp;&nbsp;⟺&nbsp;&nbsp; dV/dx = −q, &nbsp; dM/dx = V</div>
+  const ej = `<div class="eq">Ejemplo, tramo ${kx + 1}: &nbsp; dV/dx = d(${fmtPoly(sx.V)})/dx = ${fmtPoly(pder(sx.V).length ? pder(sx.V) : [0])} = q &nbsp;&nbsp;·&nbsp;&nbsp; dM/dx = d(${fmtPoly(sx.M)})/dx = ${fmtPoly(pder(sx.M).length ? pder(sx.M) : [0])} = V</div>`;
+  $('solLaws').innerHTML = `<div class="eq">q(x) &nbsp;—( V = ∫q dx )→&nbsp; V(x) &nbsp;—( M = ∫V dx )→&nbsp; M(x) &nbsp;&nbsp;⟺&nbsp;&nbsp; dV/dx = q, &nbsp; dM/dx = V</div>
     <div class="eq">Cargas puntuales: una fuerza F produce un salto ΔV = F en el cortante; un momento C produce un salto ΔM = C en el flector.</div>
-    <table><tr><th>Tramo</th><th>Intervalo (m)</th><th>Cargas puntuales al inicio del tramo<br><span class="note">(saltos)</span></th><th>q(x) (kN/m)</th><th>V(x) (kN)<br><span class="note">dV/dx = −q</span></th><th>M(x) (kN·m)<br><span class="note">dM/dx = V</span></th></tr>` +
+    <table><tr><th>Tramo</th><th>Intervalo (m)</th><th>Cargas puntuales al inicio del tramo<br><span class="note">(saltos)</span></th><th>q(x) (kN/m)</th><th>V(x) (kN)<br><span class="note">dV/dx = q</span></th><th>M(x) (kN·m)<br><span class="note">dM/dx = V</span></th></tr>` +
     segs.map((s, k) => `<tr><td>${k + 1}</td><td>${fmt(s.x1)} &lt; x &lt; ${fmt(s.x2)}</td><td>x = ${fmt(s.x1)}:<br>${acts(s.x1)}</td><td>q = ${fmtPoly(s.Q)}</td><td>V = ${fmtPoly(s.V)}</td><td>M = ${fmtPoly(s.M)}</td></tr>`).join('') +
     `<tr><td>fin</td><td>x = ${fmt(S.L)}</td><td>x = ${fmt(S.L)}:<br>${acts(nodesL[nodesL.length - 1])}</td><td colspan="3" class="note">Tras la última carga V y M deben volver a 0 (equilibrio).</td></tr>` +
     `</table>` + ej + `<div class="note">x medida desde el extremo izquierdo de la viga.</div>`;
@@ -799,7 +800,7 @@ function datosHTML() {
   h += `<table><tr><th>Apoyo</th><th>Tipo</th><th>x (m)</th></tr>` + S.supports.map((s, i) => `<tr><td><b>${LET[i]}</b></td><td>${TYPES[s.type]}</td><td>${fmt(s.x)}</td></tr>`).join('') + `</table>`;
   if (S.points.length) h += `<table><tr><th>Carga puntual</th><th>x (m)</th><th>P (kN)</th><th>Sentido</th></tr>` + S.points.map((p, i) => `<tr><td><b>P${i + 1}</b></td><td>${fmt(p.x)}</td><td>${fmt(Math.abs(p.P))}</td><td>${p.P >= 0 ? '↓ hacia abajo' : '↑ hacia arriba'}</td></tr>`).join('') + `</table>`;
   if (S.moments.length) h += `<table><tr><th>Momento</th><th>x (m)</th><th>M (kN·m)</th><th>Sentido</th></tr>` + S.moments.map((m, i) => `<tr><td><b>M${i + 1}</b></td><td>${fmt(m.x)}</td><td>${fmt(Math.abs(m.C))}</td><td>${m.C >= 0 ? '↻ horario' : '↺ antihorario'}</td></tr>`).join('') + `</table>`;
-  if (S.dists.length) h += `<table><tr><th>Distribuida</th><th>Tipo</th><th>Desde (m)</th><th>Hasta (m)</th><th>q inicio (kN/m)</th><th>q fin (kN/m)</th></tr>` + S.dists.map((d, i) => `<tr><td><b>q${i + 1}</b></td><td>${QTYPES[d.type]}</td><td>${fmt(d.a)}</td><td>${fmt(d.b)}</td><td>${fmt(d.q1)}</td><td>${fmt(d.q2)}</td></tr>`).join('') + `</table>`;
+  if (S.dists.length) h += `<table><tr><th>Distribuida</th><th>Tipo</th><th>Desde (m)</th><th>Hasta (m)</th><th>q inicio (kN/m)</th><th>q fin (kN/m)</th></tr>` + S.dists.map((d, i) => `<tr><td><b>q${i + 1}</b></td><td>${QTYPES[d.type]}</td><td>${fmt(d.a)}</td><td>${fmt(d.b)}</td><td>${fmt(-d.q1)}</td><td>${fmt(-d.q2)}</td></tr>`).join('') + `</table><p class="note">Criterio: cargas positivas hacia arriba, negativas hacia abajo.</p>`;
   return h;
 }
 function reportDoc(withToolbar) {
@@ -821,7 +822,7 @@ function reportDoc(withToolbar) {
     add('rFbd', 'Diagrama de sólido libre', $('solFbd').innerHTML);
     add('rSteps', 'Planteamiento y ecuaciones de equilibrio', $('solSteps').innerHTML);
     add('rReac', 'Reacciones', $('solReac').innerHTML);
-    if (validDists(S).length) add('rQ', 'Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia abajo)</span>', $('solQ').innerHTML);
+    if (validDists(S).length) add('rQ', 'Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia arriba)</span>', $('solQ').innerHTML);
     add('rV', 'Diagrama de esfuerzos cortantes V(x)', $('solV').innerHTML);
     add('rM', 'Diagrama de momentos flectores M(x)', $('solM').innerHTML);
     add('rExt', 'Valores máximos', $('solExt').innerHTML);
