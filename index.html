@@ -81,6 +81,7 @@
   <defs>
     <marker id="ah-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#c62828"/></marker>
     <marker id="ah-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#1565c0"/></marker>
+    <marker id="ah-org" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#e65100"/></marker>
     <marker id="ah-mag" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#6a1b9a"/></marker>
     <marker id="ah-grn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#2e7d32"/></marker>
   </defs>
@@ -89,7 +90,7 @@
 <header>
   <img src="icons/icon-192.png" alt="">
   <h1>Vigas · Diagramas de esfuerzos cortantes y momentos flectores</h1>
-  <span id="ver" style="font-size:.85rem;opacity:.85">v2.4 · 14-11-2026</span>
+  <span id="ver" style="font-size:.85rem;opacity:.85">v2.5 · 14-11-2026</span>
   <button id="installBtn" hidden>⬇ Instalar app</button>
   <button id="printBtn" class="noprint">🖨 Imprimir</button>
 </header>
@@ -127,6 +128,7 @@
       <div class="fld">
         <label>Nº de cargas distribuidas y tipo</label>
         <select id="nQ"></select>
+        <label class="note"><input type="checkbox" id="upQ"> permitir alguna hacia arriba (negativa)</label>
         <div class="sub" id="qTypes"></div>
       </div>
     </div>
@@ -148,7 +150,7 @@
     <h2>Criterio de signos</h2>
     <ul id="critList">
       <li><b>x</b> se mide desde el extremo izquierdo de la viga. Unidades: kN y m.</li>
-      <li><b>Cargas puntuales P</b> y <b>distribuidas q</b>: positivas hacia abajo.</li>
+      <li><b>Cargas puntuales P</b> y <b>distribuidas q</b>: positivas hacia abajo (↓, en azul), negativas hacia arriba (↑, en naranja).</li>
       <li><b>Momentos aplicados</b>: positivos en sentido horario (↻), negativos antihorario (↺).</li>
       <li><b>Cortante V(x)</b>: suma de las fuerzas verticales a la izquierda de la sección (positivas hacia arriba).</li>
       <li><b>Flector M(x)</b>: suma de momentos respecto a la sección de lo que está a su izquierda; positivo si tracciona la fibra inferior (la viga se “sonríe”). Se cumple dM/dx = V y dV/dx = −q.</li>
@@ -430,6 +432,10 @@ function generate() {
     if (type === 'triUp') q1 = 0;
     if (type === 'triDown') q2 = 0;
     if (type === 'trap') { q1 = pick(qv); do { q2 = pick(qv); } while (q2 === q1); }
+    if ($('upQ').checked && Math.random() < 0.35) {
+      if (type === 'trap' && Math.random() < 0.4) q2 = -q2;      // trapezoidal que cambia de signo
+      else { q1 = -q1; q2 = -q2; }
+    }
     dists.push({ type, a, b, q1, q2 });
   });
   S = { L, supports: sups, points, moments, dists };
@@ -455,7 +461,7 @@ function renderTables() {
     `</table><button class="mini sec" data-add="moments">+ momento</button></div>`;
   h += `<div style="grid-column:1/-1"><h4>Cargas distribuidas (+ hacia abajo)</h4><table><tr><th></th><th>Tipo</th><th>desde (m)</th><th>hasta (m)</th><th>q inicio</th><th>q fin</th><th></th></tr>` +
     S.dists.map((d, i) => `<tr><td><b>q${i + 1}</b></td><td>${qTypeSel(i, d.type)}</td><td>${numIn(`dists.${i}.a`, d.a)}</td><td>${numIn(`dists.${i}.b`, d.b)}</td><td>${numIn(`dists.${i}.q1`, d.q1, 1)}</td><td>${numIn(`dists.${i}.q2`, d.q2, 1)}</td><td>${del('dists.' + i)}</td></tr>`).join('') +
-    `</table><div class="note">q en kN/m</div><button class="mini sec" data-add="dists">+ distribuida</button></div>`;
+    `</table><div class="note">q en kN/m · positiva ↓ hacia abajo, negativa ↑ hacia arriba</div><button class="mini sec" data-add="dists">+ distribuida</button></div>`;
   $('dataTables').innerHTML = h + '</div>';
 }
 function normalize(editedKey) {
@@ -505,15 +511,24 @@ function drawBeam(S, reactions) {
   // distribuidas
   dists.forEach((d, j) => {
     const base = beamY - 8 - dT[j] * (tierH + gap), xa = X(d.a), xb = X(d.b);
-    const h1 = Math.abs(d.q1) / qmax * tierH, h2 = Math.abs(d.q2) / qmax * tierH;
-    g += `<polygon points="${xa},${base} ${xb},${base} ${xb},${base - h2} ${xa},${base - h1}" fill="rgba(21,101,192,.12)" stroke="#1565c0" stroke-width="1.5"/>`;
+    const qt = t => d.q1 + (d.q2 - d.q1) * t, H = q => Math.abs(q) / qmax * tierH;
+    const cuts = [0]; if (d.q1 * d.q2 < 0) cuts.push(d.q1 / (d.q1 - d.q2)); cuts.push(1);
+    for (let c = 0; c < cuts.length - 1; c++) {             // tramos de un mismo signo
+      const t1 = cuts[c], t2 = cuts[c + 1], up = qt((t1 + t2) / 2) < 0;
+      const x1 = xa + t1 * (xb - xa), x2 = xa + t2 * (xb - xa);
+      g += `<polygon points="${x1},${base} ${x2},${base} ${x2},${base - H(qt(t2))} ${x1},${base - H(qt(t1))}" fill="${up ? 'rgba(230,81,0,.13)' : 'rgba(21,101,192,.12)'}" stroke="${up ? '#e65100' : '#1565c0'}" stroke-width="1.5"/>`;
+    }
     const nA = Math.max(2, Math.round((xb - xa) / 26));
     for (let i = 0; i <= nA; i++) {
-      const t = i / nA, x = xa + t * (xb - xa), h = h1 + (h2 - h1) * t;
-      if (h > 6) g += `<line x1="${x}" y1="${base - h}" x2="${x}" y2="${base - 1}" stroke="#1565c0" stroke-width="1.4" marker-end="url(#ah-blue)"/>`;
+      const t = i / nA, x = xa + t * (xb - xa), q = qt(t), h = H(q);
+      if (h > 6) g += q > 0
+        ? `<line x1="${x}" y1="${base - h}" x2="${x}" y2="${base - 1}" stroke="#1565c0" stroke-width="1.4" marker-end="url(#ah-blue)"/>`
+        : `<line x1="${x}" y1="${base - 1}" x2="${x}" y2="${base - h}" stroke="#e65100" stroke-width="1.4" marker-end="url(#ah-org)"/>`;
     }
-    const lbl = Math.abs(d.q1 - d.q2) < 1e-9 ? `q${d.i + 1} = ${fmt(d.q1)} kN/m` : `q${d.i + 1}: ${fmt(d.q1)} → ${fmt(d.q2)} kN/m`;
-    g += `<text x="${(xa + xb) / 2}" y="${base - Math.max(h1, h2) - 7}" text-anchor="middle" font-size="14" fill="#0d47a1" class="halo">${lbl}</text>`;
+    const arrow = q => q > 0 ? '↓' : (q < 0 ? '↑' : '');
+    const lbl = Math.abs(d.q1 - d.q2) < 1e-9 ? `q${d.i + 1} = ${fmt(Math.abs(d.q1))} kN/m ${arrow(d.q1)}` : `q${d.i + 1}: ${fmt(d.q1)} → ${fmt(d.q2)} kN/m`;
+    const allUp = d.q1 <= 0 && d.q2 <= 0;
+    g += `<text x="${(xa + xb) / 2}" y="${base - Math.max(H(d.q1), H(d.q2)) - 7}" text-anchor="middle" font-size="14" fill="${allUp ? '#bf360c' : '#0d47a1'}" class="halo">${lbl}</text>`;
   });
   // viga
   g += `<rect x="${X(0)}" y="${beamY - 6}" width="${X(L) - X(0)}" height="12" fill="#b0bec5" stroke="#37474f" stroke-width="1.5"/>`;
@@ -646,9 +661,9 @@ function renderSolution() {
   // Pasos
   let st = '';
   if (dists.length) {
-    st += `<h3>Paso 1 · Resultantes de las cargas distribuidas</h3><table><tr><th></th><th>Tipo</th><th>Resultante Q (kN)</th><th>Posición x̄ (m)</th></tr>` +
-      dists.map(d => `<tr><td><b>Q${d.i + 1}</b></td><td>${QTYPES[d.type] || ''}</td><td>${fmt(d.W)}</td><td>${fmt(d.xc)}</td></tr>`).join('') + `</table>
-      <div class="note">Uniforme: Q = q·a, en el centro. Triangular: Q = q·a/2, a 1/3 del lado mayor. Trapezoidal: suma de rectángulo + triángulo.</div>`;
+    st += `<h3>Paso 1 · Resultantes de las cargas distribuidas</h3><table><tr><th></th><th>Tipo</th><th>Resultante Q (kN)</th><th>Sentido</th><th>Posición x̄ (m)</th></tr>` +
+      dists.map(d => `<tr><td><b>Q${d.i + 1}</b></td><td>${QTYPES[d.type] || ''}</td><td>${fmt(Math.abs(d.W))}</td><td>${d.W > 1e-9 ? '↓ hacia abajo' : (d.W < -1e-9 ? '↑ hacia arriba' : '—')}</td><td>${Math.abs(d.W) > 1e-9 ? fmt(d.xc) : '—'}</td></tr>`).join('') + `</table>
+      <div class="note">Uniforme: Q = q·a, en el centro. Triangular: Q = q·a/2, a 1/3 del lado mayor. Trapezoidal: suma de rectángulo + triángulo. Una q negativa actúa hacia arriba y su resultante también.</div>`;
   }
   const D = [...S.points.map((p, i) => ({ n: `P<sub>${i + 1}</sub>`, D: p.P, x: p.x })), ...dists.map(d => ({ n: `Q<sub>${d.i + 1}</sub>`, D: d.W, x: d.xc }))];
   const C = S.moments.map((m, i) => ({ n: `M<sub>${i + 1}</sub>`, C: m.C }));
