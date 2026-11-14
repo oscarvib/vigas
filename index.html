@@ -90,7 +90,7 @@
 <header>
   <img src="icons/icon-192.png" alt="">
   <h1>Vigas · Diagramas de esfuerzos cortantes y momentos flectores</h1>
-  <span id="ver" style="font-size:.85rem;opacity:.85">v2.6 · 14-11-2026</span>
+  <span id="ver" style="font-size:.85rem;opacity:.85">v2.7 · 14-11-2026</span>
   <button id="installBtn" hidden>⬇ Instalar app</button>
   <button id="printBtn" class="noprint">🖨 Imprimir</button>
 </header>
@@ -151,9 +151,9 @@
     <ul id="critList">
       <li><b>x</b> se mide desde el extremo izquierdo de la viga. Unidades: kN y m.</li>
       <li><b>Cargas puntuales P</b> y <b>distribuidas q</b>: criterio del eje y hacia arriba → <b>positivas hacia arriba</b> (↑, en naranja) y <b>negativas hacia abajo</b> (↓, en azul). Una carga de 10 kN/m hacia abajo es q = −10.</li>
-      <li><b>Momentos aplicados</b>: positivos en sentido horario (↻), negativos antihorario (↺).</li>
+      <li><b>Momentos aplicados</b>: positivos en sentido <b>antihorario</b> (↺, de x hacia y), negativos en sentido horario (↻).</li>
       <li><b>Cortante V(x)</b>: suma de las fuerzas verticales a la izquierda de la sección (positivas hacia arriba).</li>
-      <li><b>Flector M(x)</b>: suma de momentos respecto a la sección de lo que está a su izquierda; positivo si tracciona la fibra inferior (la viga se “sonríe”). Se cumple dV/dx = q y dM/dx = V.</li>
+      <li><b>Flector M(x)</b>: suma de momentos respecto a la sección de lo que está a su izquierda; positivo si tracciona la fibra inferior (la viga se “sonríe”). Se cumple dV/dx = q y dM/dx = V. Por este criterio de flectores, un momento aplicado antihorario hace <i>bajar</i> el diagrama de M y uno horario lo hace <i>subir</i>.</li>
       <li>Las vigas hiperestáticas se resuelven con el método de rigidez (EI constante, que no influye en las reacciones). Solo se consideran cargas verticales: la reacción horizontal es nula.</li>
     </ul>
   </section>
@@ -456,8 +456,8 @@ function renderTables() {
   h += `<div><h4>Cargas puntuales (+ hacia arriba ↑, − hacia abajo ↓)</h4><table><tr><th></th><th>x (m)</th><th>P (kN)</th><th></th></tr>` +
     S.points.map((p, i) => `<tr><td><b>P${i + 1}</b></td><td>${numIn(`points.${i}.x`, p.x)}</td><td>${numIn(`points.${i}.P`, -p.P, 1)}</td><td>${del('points.' + i)}</td></tr>`).join('') +
     `</table><button class="mini sec" data-add="points">+ carga</button></div>`;
-  h += `<div><h4>Momentos puntuales (+ horario ↻)</h4><table><tr><th></th><th>x (m)</th><th>M (kN·m)</th><th></th></tr>` +
-    S.moments.map((m, i) => `<tr><td><b>M${i + 1}</b></td><td>${numIn(`moments.${i}.x`, m.x)}</td><td>${numIn(`moments.${i}.C`, m.C, 1)}</td><td>${del('moments.' + i)}</td></tr>`).join('') +
+  h += `<div><h4>Momentos puntuales (+ antihorario ↺, − horario ↻)</h4><table><tr><th></th><th>x (m)</th><th>M (kN·m)</th><th></th></tr>` +
+    S.moments.map((m, i) => `<tr><td><b>M${i + 1}</b></td><td>${numIn(`moments.${i}.x`, m.x)}</td><td>${numIn(`moments.${i}.C`, -m.C, 1)}</td><td>${del('moments.' + i)}</td></tr>`).join('') +
     `</table><button class="mini sec" data-add="moments">+ momento</button></div>`;
   h += `<div style="grid-column:1/-1"><h4>Cargas distribuidas (+ hacia arriba ↑, − hacia abajo ↓)</h4><table><tr><th></th><th>Tipo</th><th>desde (m)</th><th>hasta (m)</th><th>q inicio</th><th>q fin</th><th></th></tr>` +
     S.dists.map((d, i) => `<tr><td><b>q${i + 1}</b></td><td>${qTypeSel(i, d.type)}</td><td>${numIn(`dists.${i}.a`, d.a)}</td><td>${numIn(`dists.${i}.b`, d.b)}</td><td>${numIn(`dists.${i}.q1`, -d.q1, 1)}</td><td>${numIn(`dists.${i}.q2`, -d.q2, 1)}</td><td>${del('dists.' + i)}</td></tr>`).join('') +
@@ -484,7 +484,7 @@ $('dataTables').addEventListener('change', e => {
   for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
   const last = parts[parts.length - 1];
   o[last] = e.target.tagName === 'SELECT' ? e.target.value : parseFloat(e.target.value);
-  if (['P', 'q1', 'q2'].includes(last)) o[last] = -o[last];   // pantalla: + hacia arriba; interno: + hacia abajo
+  if (['P', 'q1', 'q2', 'C'].includes(last)) o[last] = -o[last];   // pantalla: + hacia arriba; interno: + hacia abajo
   normalize(k); renderTables(); update();
 });
 $('dataTables').addEventListener('click', e => {
@@ -666,25 +666,28 @@ function renderSolution() {
       dists.map(d => `<tr><td><b>Q${d.i + 1}</b></td><td>${QTYPES[d.type] || ''}</td><td>${fmt(Math.abs(d.W))}</td><td>${d.W > 1e-9 ? '↓ hacia abajo' : (d.W < -1e-9 ? '↑ hacia arriba' : '—')}</td><td>${Math.abs(d.W) > 1e-9 ? fmt(d.xc) : '—'}</td></tr>`).join('') + `</table>
       <div class="note">Uniforme: Q = q·a, en el centro. Triangular: Q = q·a/2, a 1/3 del lado mayor. Trapezoidal: suma de rectángulo + triángulo. Con el criterio de signos, una q negativa actúa hacia abajo y una positiva hacia arriba.</div>`;
   }
-  const D = [...S.points.map((p, i) => ({ n: `P<sub>${i + 1}</sub>`, D: p.P, x: p.x })), ...dists.map(d => ({ n: `Q<sub>${d.i + 1}</sub>`, D: d.W, x: d.xc }))];
-  const C = S.moments.map((m, i) => ({ n: `M<sub>${i + 1}</sub>`, C: m.C }));
+  // Criterio: fuerzas + hacia arriba, momentos + antihorario
+  const Fl = [...S.points.map((p, i) => ({ F: -p.P, x: p.x })), ...dists.map(d => ({ F: -d.W, x: d.xc }))];
+  const Cl = S.moments.map(m => ({ C: -m.C }));
   const arm = v => v < 0 ? `(${fmt(v)})` : fmt(v);
-  const terms = xA => { const t = D.map(d => ({ neg: d.D < 0, s: `${fmt(Math.abs(d.D))}·${arm(d.x - xA)}` })).concat(C.map(c => ({ neg: c.C < 0, s: fmt(Math.abs(c.C)) }))); return t.length ? t.map((e, k) => (k ? (e.neg ? ' − ' : ' + ') : (e.neg ? '−' : '')) + e.s).join('') : '0'; };
-  const sumD = D.reduce((a, d) => a + d.D, 0);
-  const sumDstr = D.length ? D.map((d, k) => (k ? (d.D < 0 ? ' − ' : ' + ') : (d.D < 0 ? '−' : '')) + fmt(Math.abs(d.D))).join('') : '0';
+  const sgnJoin = t => t.length ? t.map((e, k) => (k ? (e.neg ? ' − ' : ' + ') : (e.neg ? '−' : '')) + e.s).join('') : '0';
+  const tail = xA => Fl.map(f => ({ neg: f.F < 0, s: `${fmt(Math.abs(f.F))}·${arm(f.x - xA)}` })).concat(Cl.map(c => ({ neg: c.C < 0, s: fmt(Math.abs(c.C)) }))).map(e => (e.neg ? ' − ' : ' + ') + e.s).join('');
+  const terms = xA => sgnJoin(Fl.map(f => ({ neg: f.F < 0, s: `${fmt(Math.abs(f.F))}·${arm(f.x - xA)}` })).concat(Cl.map(c => ({ neg: c.C < 0, s: fmt(Math.abs(c.C)) }))));
+  const sumF = Fl.reduce((a, f) => a + f.F, 0);
+  const sumFstr = sgnJoin(Fl.map(f => ({ neg: f.F < 0, s: fmt(Math.abs(f.F)) })));
   const rs = sol.reactions;
   const step = dists.length ? 2 : 1;
+  const crit = `<div class="note">Criterio: fuerzas positivas hacia arriba y momentos positivos en sentido antihorario. Brazos medidos desde el apoyo (negativo si la carga está a su izquierda).</div>`;
   if (g === 0 && rs.length === 1 && rs[0].type === 'fixed') {
     const A = LET[0], r = rs[0];
     st += `<h3>Paso ${step} · Ecuaciones de equilibrio</h3>
-      <div class="eq">ΣF<sub>y</sub> = 0: &nbsp; R<sub>${A}</sub> = ${sumDstr} = <b>${fmt(r.R)} kN</b></div>
-      <div class="eq">ΣM<sub>${A}</sub> = 0 (horario +): &nbsp; ${terms(r.x)} − M<sub>${A}</sub> = 0 &nbsp;⇒&nbsp; M<sub>${A}</sub> = <b>${fmt(r.M)} kN·m</b> (positivo = antihorario)</div>`;
+      <div class="eq">ΣF<sub>y</sub> = 0: &nbsp; R<sub>${A}</sub> + (${sumFstr}) = 0 &nbsp;⇒&nbsp; R<sub>${A}</sub> = <b>${fmt(r.R)} kN</b></div>
+      <div class="eq">ΣM<sub>${A}</sub> = 0 (antihorario +): &nbsp; M<sub>${A}</sub>${tail(r.x)} = 0 &nbsp;⇒&nbsp; M<sub>${A}</sub> = <b>${fmt(r.M)} kN·m</b></div>${crit}`;
   } else if (g === 0 && rs.length === 2) {
     const [a, b] = rs, A = LET[0], B = LET[1], dAB = b.x - a.x;
     st += `<h3>Paso ${step} · Ecuaciones de equilibrio</h3>
-      <div class="eq">ΣM<sub>${A}</sub> = 0 (horario +): &nbsp; ${terms(a.x)} − R<sub>${B}</sub>·${fmt(dAB)} = 0 &nbsp;⇒&nbsp; R<sub>${B}</sub> = <b>${fmt(b.R)} kN</b></div>
-      <div class="eq">ΣF<sub>y</sub> = 0: &nbsp; R<sub>${A}</sub> + R<sub>${B}</sub> = ${sumDstr} = ${fmt(sumD)} &nbsp;⇒&nbsp; R<sub>${A}</sub> = ${fmt(sumD)} − ${arm(b.R)} = <b>${fmt(a.R)} kN</b></div>
-      <div class="note">Distancias medidas desde ${A}; un brazo negativo indica que la carga está a la izquierda de ${A}.</div>`;
+      <div class="eq">ΣM<sub>${A}</sub> = 0 (antihorario +): &nbsp; R<sub>${B}</sub>·${fmt(dAB)}${tail(a.x)} = 0 &nbsp;⇒&nbsp; R<sub>${B}</sub> = <b>${fmt(b.R)} kN</b></div>
+      <div class="eq">ΣF<sub>y</sub> = 0: &nbsp; R<sub>${A}</sub> + R<sub>${B}</sub> + (${sumFstr}) = 0 &nbsp;⇒&nbsp; R<sub>${A}</sub> = ${fmt(-sumF)} − ${arm(b.R)} = <b>${fmt(a.R)} kN</b></div>${crit}`;
   } else if (g > 0) {
     st += `<h3>Paso ${step} · Resolución</h3><p class="note">Hay ${g} incógnita(s) más que ecuaciones de equilibrio. Se ha resuelto imponiendo la compatibilidad de deformaciones (método de rigidez, EI constante: flecha nula en los apoyos y giro nulo en los empotramientos). Para resolverlo a mano puedes usar el método de las fuerzas (quitar ${g} reacción(es) redundante(s) y obligar a que la flecha/giro sea cero), la ecuación de los tres momentos o la superposición con tablas de prontuario.</p>`;
   }
@@ -731,7 +734,7 @@ function renderSolution() {
   const ks = segs.findIndex(sg => sg.Q.some(c => Math.abs(c) > 1e-9)), kx = ks >= 0 ? ks : 0, sx = segs[kx];
   const ej = `<div class="eq">Ejemplo, tramo ${kx + 1}: &nbsp; dV/dx = d(${fmtPoly(sx.V)})/dx = ${fmtPoly(pder(sx.V).length ? pder(sx.V) : [0])} = q &nbsp;&nbsp;·&nbsp;&nbsp; dM/dx = d(${fmtPoly(sx.M)})/dx = ${fmtPoly(pder(sx.M).length ? pder(sx.M) : [0])} = V</div>`;
   $('solLaws').innerHTML = `<div class="eq">q(x) &nbsp;—( V = ∫q dx )→&nbsp; V(x) &nbsp;—( M = ∫V dx )→&nbsp; M(x) &nbsp;&nbsp;⟺&nbsp;&nbsp; dV/dx = q, &nbsp; dM/dx = V</div>
-    <div class="eq">Cargas puntuales: una fuerza F produce un salto ΔV = F en el cortante; un momento C produce un salto ΔM = C en el flector.</div>
+    <div class="eq">Cargas puntuales: una fuerza F produce un salto ΔV = F en el cortante; un momento aplicado M<sub>0</sub> (antihorario +) produce un salto ΔM = −M<sub>0</sub> en el flector: los antihorarios bajan el diagrama y los horarios lo suben.</div>
     <table><tr><th>Tramo</th><th>Intervalo (m)</th><th>Cargas puntuales al inicio del tramo<br><span class="note">(saltos)</span></th><th>q(x) (kN/m)</th><th>V(x) (kN)<br><span class="note">dV/dx = q</span></th><th>M(x) (kN·m)<br><span class="note">dM/dx = V</span></th></tr>` +
     segs.map((s, k) => `<tr><td>${k + 1}</td><td>${fmt(s.x1)} &lt; x &lt; ${fmt(s.x2)}</td><td>x = ${fmt(s.x1)}:<br>${acts(s.x1)}</td><td>q = ${fmtPoly(s.Q)}</td><td>V = ${fmtPoly(s.V)}</td><td>M = ${fmtPoly(s.M)}</td></tr>`).join('') +
     `<tr><td>fin</td><td>x = ${fmt(S.L)}</td><td>x = ${fmt(S.L)}:<br>${acts(nodesL[nodesL.length - 1])}</td><td colspan="3" class="note">Tras la última carga V y M deben volver a 0 (equilibrio).</td></tr>` +
