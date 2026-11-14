@@ -48,6 +48,15 @@
   th,td{border-bottom:1px solid #e3e8ee;padding:5px 8px;text-align:left;vertical-align:middle}
   th{background:#f5f8fb;font-weight:600;color:var(--mut)}
   .tables{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:6px 22px}
+  details.sec{border-top:1px solid #e3e8ee;padding:2px 0}
+  details.sec>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;user-select:none}
+  details.sec>summary::-webkit-details-marker{display:none}
+  details.sec>summary::before{content:'▸';color:var(--pri);font-size:1.1rem;transition:transform .15s;display:inline-block;width:14px}
+  details.sec[open]>summary::before{transform:rotate(90deg)}
+  details.sec>summary h3{margin:10px 0}
+  details.sec>summary:hover h3{text-decoration:underline}
+  #solSteps>h3:first-child{margin-top:4px}
+  .secbtns{margin:6px 0 4px}
   .tables>div{min-width:0;overflow-x:auto}
   .tables input[type=number]{width:68px}
   #solLaws,#solReac,#solExt{overflow-x:auto}
@@ -61,7 +70,7 @@
   details summary{cursor:pointer;font-weight:600;margin:6px 0}
   .halo{paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
   .extr td:nth-child(2){font-weight:600}
-  .tab{}@media print{.tab{display:block!important}nav.tabs,header button,#config,.actions,#toggleSol,.noprint{display:none!important}.card{box-shadow:none;break-inside:avoid}body{background:#fff}}
+  .tab{}@media print{.tab{display:block!important}.secbtns{display:none!important}nav.tabs,header button,#config,.actions,#toggleSol,.noprint{display:none!important}.card{box-shadow:none;break-inside:avoid}body{background:#fff}}
 </style>
 </head>
 <body>
@@ -77,7 +86,7 @@
 <header>
   <img src="icons/icon-192.png" alt="">
   <h1>Vigas · Diagramas de esfuerzos cortantes y momentos flectores</h1>
-  <span id="ver" style="font-size:.85rem;opacity:.85">v2.2 · 14-11-2026</span>
+  <span id="ver" style="font-size:.85rem;opacity:.85">v2.3 · 14-11-2026</span>
   <button id="installBtn" hidden>⬇ Instalar app</button>
   <button id="printBtn" class="noprint">🖨 Imprimir</button>
 </header>
@@ -153,20 +162,19 @@
     <div id="solution" hidden>
       <div id="solHead"></div>
       <div id="solBody">
-        <h3>Diagrama de sólido libre</h3>
-        <div id="solFbd"></div>
-        <div id="solSteps"></div>
-        <h3>Reacciones</h3>
-        <div id="solReac"></div>
-        <div id="solQwrap"><h3>Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia abajo)</span></h3><div id="solQ"></div></div>
-        <h3>Diagrama de esfuerzos cortantes V(x)</h3>
-        <div id="solV"></div>
-        <h3>Diagrama de momentos flectores M(x)</h3>
-        <div id="solM"></div>
-        <h3>Valores máximos</h3>
-        <div id="solExt"></div>
-        <h3>Leyes de esfuerzos por tramos</h3>
-        <div id="solLaws"></div>
+        <div class="row secbtns">
+          <button class="mini" data-view="diag">📐 Solo viga y diagramas</button>
+          <button class="mini sec" data-view="all">⊞ Expandir todo</button>
+          <button class="mini sec" data-view="none">⊟ Contraer todo</button>
+        </div>
+        <details class="sec" data-g="diag" open><summary><h3>Diagrama de sólido libre</h3></summary><div id="solFbd"></div></details>
+        <details class="sec" open><summary><h3>Planteamiento y ecuaciones de equilibrio</h3></summary><div id="solSteps"></div></details>
+        <details class="sec" open><summary><h3>Reacciones</h3></summary><div id="solReac"></div></details>
+        <details class="sec" data-g="diag" id="solQwrap" open><summary><h3>Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia abajo)</span></h3></summary><div id="solQ"></div></details>
+        <details class="sec" data-g="diag" open><summary><h3>Diagrama de esfuerzos cortantes V(x)</h3></summary><div id="solV"></div></details>
+        <details class="sec" data-g="diag" open><summary><h3>Diagrama de momentos flectores M(x)</h3></summary><div id="solM"></div></details>
+        <details class="sec" open><summary><h3>Valores máximos</h3></summary><div id="solExt"></div></details>
+        <details class="sec" open><summary><h3>Leyes de esfuerzos por tramos</h3></summary><div id="solLaws"></div></details>
       </div>
     </div>
   </section>
@@ -519,7 +527,7 @@ function drawBeam(S, reactions) {
 // ---------------- Diagramas V y M ----------------
 let clipId = 0;
 function plot(segs, which, L, nodes, extremes) {
-  const W = 1000, H = 250, m = 75, top = 28, bot = 34, X = x => m + x / L * (W - 2 * m);
+  const W = 1000, H = which === 'Q' ? 160 : 250, m = 75, top = 28, bot = 34, X = x => m + x / L * (W - 2 * m);
   const sgn = (which === 'M' && $('mDown').checked) ? -1 : 1;
   const pts = [[0, 0]];
   segs.forEach(s => { const n = Math.max(2, Math.ceil((s.x2 - s.x1) / L * 160)); for (let i = 0; i <= n; i++) { const x = s.x1 + (s.x2 - s.x1) * i / n; pts.push([x, pev(s[which], x)]); } });
@@ -687,6 +695,10 @@ function showTab(id) {
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 let startTab = 'tConfig'; try { startTab = localStorage.getItem('vigasTab') || 'tConfig'; } catch (e) {}
 showTab(document.getElementById(startTab) ? startTab : 'tConfig');
+document.querySelectorAll('.secbtns button').forEach(b => b.onclick = () => {
+  const v = b.dataset.view;
+  document.querySelectorAll('details.sec').forEach(d => d.open = v === 'all' || (v === 'diag' && d.dataset.g === 'diag'));
+});
 $('gen').onclick = () => { generate(); showTab('tEnun'); };
 $('toggleSol').onclick = () => { showSol = !showSol; update(); };
 $('mDown').onchange = update;
