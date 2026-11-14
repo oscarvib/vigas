@@ -15,7 +15,16 @@
   header{background:var(--pri);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   header h1{font-size:1.25rem;margin:0;flex:1}
   header img{width:36px;height:36px;border-radius:8px}
-  main{max-width:1150px;margin:0 auto;padding:16px}
+  .layout{display:flex;align-items:flex-start;min-height:calc(100vh - 60px)}
+  nav.tabs{position:sticky;top:0;width:200px;flex:0 0 200px;background:#fff;min-height:calc(100vh - 60px);box-shadow:1px 0 4px rgba(0,0,0,.06);padding:14px 10px;display:flex;flex-direction:column;gap:6px}
+  nav.tabs button{display:flex;align-items:center;gap:12px;width:100%;background:transparent;color:var(--txt);padding:11px 12px;border-radius:10px;font-size:.98rem;text-align:left;font-weight:500}
+  nav.tabs button svg{width:26px;height:26px;flex:0 0 26px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  nav.tabs button:hover{background:#eef3f8;filter:none}
+  nav.tabs button.active{background:var(--pri);color:#fff}
+  nav.tabs .num{font-size:.75rem;opacity:.7;display:block}
+  main{flex:1;min-width:0;max-width:1150px;margin:0 auto;padding:16px}
+  .tab{display:none}.tab.active{display:block}
+  @media (max-width:760px){nav.tabs{width:64px;flex-basis:64px;padding:10px 6px}nav.tabs .lbl{display:none}nav.tabs button{justify-content:center;padding:10px 0}header h1{font-size:1rem}main{padding:10px}}
   .card{background:var(--card);border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:16px 18px;margin-bottom:16px}
   h2{font-size:1.1rem;margin:0 0 12px;color:var(--pri)}
   h3{font-size:1rem;margin:18px 0 8px;color:var(--pri)}
@@ -39,6 +48,9 @@
   th,td{border-bottom:1px solid #e3e8ee;padding:5px 8px;text-align:left;vertical-align:middle}
   th{background:#f5f8fb;font-weight:600;color:var(--mut)}
   .tables{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:6px 22px}
+  .tables>div{min-width:0;overflow-x:auto}
+  .tables input[type=number]{width:68px}
+  #solLaws,#solReac,#solExt{overflow-x:auto}
   .tables h4{margin:10px 0 2px;font-size:.92rem}
   .eq{font-family:"Cambria Math","Times New Roman",serif;font-size:1.02rem;background:#f7f9fc;border-left:3px solid var(--pri);padding:8px 12px;margin:6px 0;border-radius:4px;overflow-x:auto;white-space:normal}
   .note{font-size:.88rem;color:var(--mut)}
@@ -49,7 +61,7 @@
   details summary{cursor:pointer;font-weight:600;margin:6px 0}
   .halo{paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
   .extr td:nth-child(2){font-weight:600}
-  @media print{header button,#config,.actions,#toggleSol,.noprint{display:none!important}.card{box-shadow:none;break-inside:avoid}body{background:#fff}}
+  .tab{}@media print{.tab{display:block!important}nav.tabs,header button,#config,.actions,#toggleSol,.noprint{display:none!important}.card{box-shadow:none;break-inside:avoid}body{background:#fff}}
 </style>
 </head>
 <body>
@@ -65,13 +77,19 @@
 <header>
   <img src="icons/icon-192.png" alt="">
   <h1>Vigas · Diagramas de esfuerzos cortantes y momentos flectores</h1>
-  <span id="ver" style="font-size:.85rem;opacity:.85">v2.1 · 14-11-2026</span>
+  <span id="ver" style="font-size:.85rem;opacity:.85">v2.2 · 14-11-2026</span>
   <button id="installBtn" hidden>⬇ Instalar app</button>
   <button id="printBtn" class="noprint">🖨 Imprimir</button>
 </header>
 
+<div class="layout">
+<nav class="tabs" aria-label="Secciones">
+  <button data-tab="tConfig" title="Configuración"><svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2.2" fill="#fff"/><circle cx="15" cy="12" r="2.2" fill="#fff"/><circle cx="7" cy="18" r="2.2" fill="#fff"/></svg><span class="lbl"><span class="num">1</span>Configuración</span></button>
+  <button data-tab="tEnun" title="Enunciado"><svg viewBox="0 0 24 24"><rect x="2" y="13" width="20" height="3" rx=".5"/><path d="M5 16l-2.5 4h5z"/><path d="M19 16l-2.5 4h5z"/><line x1="12" y1="3" x2="12" y2="11"/><path d="M9.5 8.5L12 11l2.5-2.5"/></svg><span class="lbl"><span class="num">2</span>Enunciado</span></button>
+  <button data-tab="tSol" title="Solución"><svg viewBox="0 0 24 24"><line x1="2" y1="12" x2="22" y2="12"/><path d="M3 12C6 3 18 3 21 12"/><path d="M3 12v5h9v-5"/><path d="M12 12v-3h9v3" opacity=".6"/></svg><span class="lbl"><span class="num">3</span>Solución</span></button>
+</nav>
 <main>
-  <section class="card" id="config">
+  <section class="card tab" id="tConfig"><div id="config">
     <h2>1. Configuración del problema</h2>
     <div class="grid">
       <div class="fld">
@@ -103,9 +121,9 @@
       <button id="gen">🎲 Generar problema aleatorio</button>
       <span class="note">Las posiciones y valores se generan al azar. Después puedes editarlos en la tabla de datos.</span>
     </div>
-  </section>
+  </div></section>
 
-  <section class="card">
+  <div class="tab" id="tEnun"><section class="card">
     <h2>2. Enunciado</h2>
     <div id="beamSvg"></div>
     <details open>
@@ -113,8 +131,20 @@
       <div id="dataTables"></div>
     </details>
   </section>
+<section class="card note">
+    <h2>Criterio de signos</h2>
+    <ul>
+      <li><b>x</b> se mide desde el extremo izquierdo de la viga. Unidades: kN y m.</li>
+      <li><b>Cargas puntuales P</b> y <b>distribuidas q</b>: positivas hacia abajo.</li>
+      <li><b>Momentos aplicados</b>: positivos en sentido horario (↻), negativos antihorario (↺).</li>
+      <li><b>Cortante V(x)</b>: suma de las fuerzas verticales a la izquierda de la sección (positivas hacia arriba).</li>
+      <li><b>Flector M(x)</b>: suma de momentos respecto a la sección de lo que está a su izquierda; positivo si tracciona la fibra inferior (la viga se “sonríe”). Se cumple dM/dx = V y dV/dx = −q.</li>
+      <li>Las vigas hiperestáticas se resuelven con el método de rigidez (EI constante, que no influye en las reacciones). Solo se consideran cargas verticales: la reacción horizontal es nula.</li>
+    </ul>
+  </section>
+  </div>
 
-  <section class="card">
+  <section class="card tab" id="tSol">
     <h2>3. Solución</h2>
     <div class="row">
       <button id="toggleSol">👁 Mostrar solución</button>
@@ -141,18 +171,9 @@
     </div>
   </section>
 
-  <section class="card note">
-    <h2>Criterio de signos</h2>
-    <ul>
-      <li><b>x</b> se mide desde el extremo izquierdo de la viga. Unidades: kN y m.</li>
-      <li><b>Cargas puntuales P</b> y <b>distribuidas q</b>: positivas hacia abajo.</li>
-      <li><b>Momentos aplicados</b>: positivos en sentido horario (↻), negativos antihorario (↺).</li>
-      <li><b>Cortante V(x)</b>: suma de las fuerzas verticales a la izquierda de la sección (positivas hacia arriba).</li>
-      <li><b>Flector M(x)</b>: suma de momentos respecto a la sección de lo que está a su izquierda; positivo si tracciona la fibra inferior (la viga se “sonríe”). Se cumple dM/dx = V y dV/dx = −q.</li>
-      <li>Las vigas hiperestáticas se resuelven con el método de rigidez (EI constante, que no influye en las reacciones). Solo se consideran cargas verticales: la reacción horizontal es nula.</li>
-    </ul>
-  </section>
+
 </main>
+</div>
 
 <script>
 'use strict';
@@ -377,7 +398,7 @@ function renderTables() {
   h += `<div><h4>Momentos puntuales (+ horario ↻)</h4><table><tr><th></th><th>x (m)</th><th>M (kN·m)</th><th></th></tr>` +
     S.moments.map((m, i) => `<tr><td><b>M${i + 1}</b></td><td>${numIn(`moments.${i}.x`, m.x)}</td><td>${numIn(`moments.${i}.C`, m.C, 1)}</td><td>${del('moments.' + i)}</td></tr>`).join('') +
     `</table><button class="mini sec" data-add="moments">+ momento</button></div>`;
-  h += `<div><h4>Cargas distribuidas (+ hacia abajo)</h4><table><tr><th></th><th>Tipo</th><th>desde (m)</th><th>hasta (m)</th><th>q inicio</th><th>q fin</th><th></th></tr>` +
+  h += `<div style="grid-column:1/-1"><h4>Cargas distribuidas (+ hacia abajo)</h4><table><tr><th></th><th>Tipo</th><th>desde (m)</th><th>hasta (m)</th><th>q inicio</th><th>q fin</th><th></th></tr>` +
     S.dists.map((d, i) => `<tr><td><b>q${i + 1}</b></td><td>${qTypeSel(i, d.type)}</td><td>${numIn(`dists.${i}.a`, d.a)}</td><td>${numIn(`dists.${i}.b`, d.b)}</td><td>${numIn(`dists.${i}.q1`, d.q1, 1)}</td><td>${numIn(`dists.${i}.q2`, d.q2, 1)}</td><td>${del('dists.' + i)}</td></tr>`).join('') +
     `</table><div class="note">q en kN/m</div><button class="mini sec" data-add="dists">+ distribuida</button></div>`;
   $('dataTables').innerHTML = h + '</div>';
@@ -657,7 +678,16 @@ function update() {
 fillSel($('nSup'), 1, 4, 2); fillSel($('nP'), 0, 5, 2); fillSel($('nM'), 0, 3, 1); fillSel($('nQ'), 0, 3, 1);
 buildSupTypes(); buildQTypes();
 $('nSup').onchange = buildSupTypes; $('nQ').onchange = buildQTypes;
-$('gen').onclick = generate;
+function showTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === id));
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
+  try { localStorage.setItem('vigasTab', id); } catch (e) {}
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+let startTab = 'tConfig'; try { startTab = localStorage.getItem('vigasTab') || 'tConfig'; } catch (e) {}
+showTab(document.getElementById(startTab) ? startTab : 'tConfig');
+$('gen').onclick = () => { generate(); showTab('tEnun'); };
 $('toggleSol').onclick = () => { showSol = !showSol; update(); };
 $('mDown').onchange = update;
 $('printBtn').onclick = () => window.print();
