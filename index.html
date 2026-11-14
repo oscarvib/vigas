@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Vigas · Cortantes y Flectores</title>
+<title>Vigas y pórticos · Esfuerzos</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1f4e79">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
@@ -60,6 +60,9 @@
   input[type=text],input[type=date],textarea{padding:6px 8px;border:1px solid #c5ced8;border-radius:6px;font:inherit;font-size:.92rem}
   textarea{width:100%;resize:vertical}
   .repopts label:not(:first-child){font-weight:400;font-size:.92rem}
+  .mode{display:flex;background:rgba(255,255,255,.15);border-radius:10px;padding:3px}
+  .mode button{background:transparent;color:#fff;padding:7px 14px;font-weight:600;border-radius:8px}
+  .mode button.on{background:#fff;color:var(--pri)}
   .tables>div{min-width:0;overflow-x:auto}
   .tables input[type=number]{width:68px}
   #solLaws,#solReac,#solExt{overflow-x:auto}
@@ -89,8 +92,9 @@
 
 <header>
   <img src="icons/icon-192.png" alt="">
-  <h1>Vigas · Diagramas de esfuerzos cortantes y momentos flectores</h1>
-  <span id="ver" style="font-size:.85rem;opacity:.85">v2.8 · 14-11-2026</span>
+  <h1>Vigas y pórticos · Diagramas de esfuerzos</h1>
+  <div class="mode" role="group" aria-label="Tipo de estructura"><button data-mode="beam" title="Viga">▬ Viga</button><button data-mode="frame" title="Pórtico">⊓ Pórtico</button></div>
+  <span id="ver" style="font-size:.85rem;opacity:.85">v3.0 · 14-11-2026</span>
   <button id="installBtn" hidden>⬇ Instalar app</button>
   <button id="printBtn" class="noprint">🖨 Imprimir</button>
 </header>
@@ -104,7 +108,8 @@
 </nav>
 <main>
   <section class="card tab" id="tConfig"><div id="config">
-    <h2>1. Configuración del problema</h2>
+    <h2>1. Configuración del problema <span class="note" id="cfgMode"></span></h2>
+    <div id="cfgBeam">
     <div class="grid">
       <div class="fld">
         <label>Longitud de la viga L (m)</label>
@@ -132,6 +137,23 @@
         <div class="sub" id="qTypes"></div>
       </div>
     </div>
+    </div>
+    <div id="cfgFrame" hidden>
+    <div class="grid">
+      <div class="fld"><label>Luz del dintel L (m)</label><div class="row"><input type="number" id="fL" value="6" step="0.5" min="1"><label><input type="checkbox" id="fLr" checked> aleatoria</label></div></div>
+      <div class="fld"><label>Altura de los pilares H (m)</label><div class="row"><input type="number" id="fH" value="4" step="0.5" min="1"><label><input type="checkbox" id="fHr" checked> aleatoria</label></div></div>
+      <div class="fld"><label>Apoyos</label>
+        <div class="row"><span>A</span><select id="fSupA"></select></div>
+        <div class="row"><span>D</span><select id="fSupD"></select></div></div>
+      <div class="fld"><label>Cargas puntuales</label>
+        <div class="row"><select id="fnPb"></select><span class="note">verticales en el dintel</span></div>
+        <div class="row"><select id="fnPc"></select><span class="note">horizontales en los pilares</span></div></div>
+      <div class="fld"><label>Nº de momentos puntuales</label><select id="fnM"></select></div>
+      <div class="fld"><label>Distribuidas en el dintel (verticales)</label><select id="fnQb"></select><div class="sub" id="fqbTypes"></div></div>
+      <div class="fld"><label>Distribuidas en los pilares (horizontales)</label><select id="fnQc"></select><div class="sub" id="fqcTypes"></div></div>
+      <div class="fld"><label>Sentidos</label><label class="note"><input type="checkbox" id="fUp"> permitir sentidos contrarios (↑ en el dintel, ← en pilares)</label></div>
+    </div>
+    </div>
     <div class="actions">
       <button id="gen">🎲 Generar problema aleatorio</button>
       <span class="note">Las posiciones y valores se generan al azar. Después puedes editarlos en la tabla de datos.</span>
@@ -154,6 +176,7 @@
       <li><b>Momentos aplicados</b>: positivos en sentido <b>antihorario</b> (↺, de x hacia y), negativos en sentido horario (↻).</li>
       <li><b>Cortante V(x)</b>: suma de las fuerzas verticales a la izquierda de la sección (positivas hacia arriba).</li>
       <li><b>Flector M(x)</b>: suma de momentos respecto a la sección de lo que está a su izquierda; positivo si tracciona la fibra inferior (la viga se “sonríe”). Se cumple dV/dx = q y dM/dx = V. Por este criterio de flectores, un momento aplicado antihorario hace <i>bajar</i> el diagrama de M y uno horario lo hace <i>subir</i>.</li>
+      <li><b>Pórticos</b>: las barras se recorren A→B→C→D (pilar izquierdo hacia arriba, dintel hacia la derecha, pilar derecho hacia abajo) y los esfuerzos se calculan con lo que queda antes de la sección. <b>N</b> positivo a tracción. <b>V</b> positivo si esas fuerzas apuntan hacia el exterior del pórtico. <b>M</b> positivo si tracciona la fibra interior (línea discontinua) y se dibuja siempre del lado traccionado.</li>
       <li>Las vigas hiperestáticas se resuelven con el método de rigidez (EI constante, que no influye en las reacciones). Solo se consideran cargas verticales: la reacción horizontal es nula.</li>
     </ul>
   </section>
@@ -163,13 +186,13 @@
     <h2>3. Solución</h2>
     <div class="row">
       <button id="toggleSol">👁 Mostrar solución</button>
-      <label class="note"><input type="checkbox" id="mDown"> dibujar M positivo hacia abajo (lado traccionado)</label>
+      <label class="note" id="mDownLbl"><input type="checkbox" id="mDown"> dibujar M positivo hacia abajo (lado traccionado)</label>
     </div>
     <div id="solution" hidden>
       <div id="solHead"></div>
       <div id="solBody">
         <div class="row secbtns">
-          <button class="mini" data-view="diag">📐 Solo viga y diagramas</button>
+          <button class="mini" data-view="diag">📐 Solo estructura y diagramas</button>
           <button class="mini sec" data-view="all">⊞ Expandir todo</button>
           <button class="mini sec" data-view="none">⊟ Contraer todo</button>
         </div>
@@ -177,6 +200,7 @@
         <details class="sec" open><summary><h3>Planteamiento y ecuaciones de equilibrio</h3></summary><div id="solSteps"></div></details>
         <details class="sec" open><summary><h3>Reacciones</h3></summary><div id="solReac"></div></details>
         <details class="sec" data-g="diag" id="solQwrap" open><summary><h3>Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia arriba)</span></h3></summary><div id="solQ"></div></details>
+        <details class="sec" data-g="diag" id="solNwrap" open hidden><summary><h3>Diagrama de esfuerzos normales N</h3></summary><div id="solN"></div></details>
         <details class="sec" data-g="diag" open><summary><h3>Diagrama de esfuerzos cortantes V(x)</h3></summary><div id="solV"></div></details>
         <details class="sec" data-g="diag" open><summary><h3>Diagrama de momentos flectores M(x)</h3></summary><div id="solM"></div></details>
         <details class="sec" open><summary><h3>Valores máximos</h3></summary><div id="solExt"></div></details>
@@ -214,7 +238,8 @@
         <label><input type="checkbox" id="rLaws" checked> Leyes por tramos</label>
       </div>
       <div class="fld"><label>Diagramas</label>
-        <label><input type="checkbox" id="rQ" checked> Cargas q(x)</label>
+        <label><input type="checkbox" id="rN" checked> Normales N (pórticos)</label>
+        <label><input type="checkbox" id="rQ" checked> Cargas q(x) (vigas)</label>
         <label><input type="checkbox" id="rV" checked> Cortantes V(x)</label>
         <label><input type="checkbox" id="rM" checked> Flectores M(x)</label>
         <label style="margin-top:6px"><input type="checkbox" id="rNewPage" checked> Empezar la solución en página nueva</label>
@@ -340,6 +365,130 @@ function rootsIn(p, a, b) {
   else { const D = c1 * c1 - 4 * c2 * c0; if (D >= 0) { const s = Math.sqrt(D); r = [(-c1 + s) / (2 * c2), (-c1 - s) / (2 * c2)]; } }
   return r.filter(x => x > a + 1e-6 && x < b - 1e-6);
 }
+// ---------------- PÓRTICOS (núcleo de cálculo) ----------------
+// Convenio de usuario: fuerzas + hacia arriba / + hacia la derecha; momentos + antihorario.
+// Barras recorridas A→B→C→D: cL (pilar izq., de A hacia arriba), b (dintel, de B a C), cR (pilar der., de C hacia abajo).
+// Ejes locales: x a lo largo de la barra, y girado 90° antihorario (hacia el exterior del pórtico).
+// N + tracción; V + si las fuerzas anteriores a la sección van hacia +y local; M + si tracciona la fibra interior.
+const FM = ['cL', 'b', 'cR'];
+function fGeom(SP) {
+  return { cL: { p0: [0, 0], d: [0, 1], len: SP.H }, b: { p0: [0, SP.H], d: [1, 0], len: SP.L }, cR: { p0: [SP.L, SP.H], d: [0, -1], len: SP.H } };
+}
+const fT = (SP, m, u) => m === 'cR' ? SP.H - u : u;
+const fDir = m => m === 'b' ? [0, 1] : [1, 0];
+const fPoint = (SP, m, t) => { const G = fGeom(SP)[m]; return [G.p0[0] + G.d[0] * t, G.p0[1] + G.d[1] * t]; };
+function fValidDists(SP) { return SP.dists.map((d, i) => ({ ...d, i })).filter(d => Math.abs(d.b - d.a) > 1e-9); }
+function fLocalDist(SP, d) {
+  const [c, s] = fGeom(SP)[d.m].d, g = fDir(d.m), toW = q => (-s * g[0] + c * g[1]) * q;
+  let ta = fT(SP, d.m, d.a), tb = fT(SP, d.m, d.b), w1 = toW(d.q1), w2 = toW(d.q2);
+  if (ta > tb) { [ta, tb] = [tb, ta]; [w1, w2] = [w2, w1]; }
+  return { ta, tb, w1, w2 };
+}
+function fResultant(SP, d) {              // resultante en coordenadas de usuario
+  const beta = (d.q2 - d.q1) / (d.b - d.a), alpha = d.q1 - beta * d.a;
+  const W = alpha * (d.b - d.a) + beta * (d.b * d.b - d.a * d.a) / 2;
+  const Su = alpha * (d.b * d.b - d.a * d.a) / 2 + beta * (d.b ** 3 - d.a ** 3) / 3;
+  const uc = Math.abs(W) > 1e-12 ? Su / W : (d.a + d.b) / 2, g = fDir(d.m);
+  const P = d.m === 'cL' ? [0, uc] : d.m === 'b' ? [uc, SP.H] : [SP.L, uc];
+  return { W, uc, x: P[0], y: P[1], Fx: g[0] * W, Fy: g[1] * W };
+}
+const SUP_DOF = { fixed: [0, 1, 2], pin: [0, 1], roller: [1], free: [] };
+const mmul = (A, B) => A.map(r => B[0].map((_, j) => r.reduce((s, v, k) => s + v * B[k][j], 0)));
+const mtr = A => A[0].map((_, j) => A.map(r => r[j]));
+const mvec = (A, v) => A.map(r => r.reduce((s, x, k) => s + x * v[k], 0));
+function solveFrame(SP) {
+  const G = fGeom(SP), EA = 1e6, EI = 1;
+  const cl = (m, t) => Math.min(G[m].len, Math.max(0, t));
+  const keys = { cL: [0, G.cL.len], b: [0, G.b.len], cR: [0, G.cR.len] };
+  SP.points.forEach(p => keys[p.m].push(cl(p.m, fT(SP, p.m, p.s))));
+  SP.moments.forEach(p => keys[p.m].push(cl(p.m, fT(SP, p.m, p.s))));
+  const LD = fValidDists(SP).map(d => ({ m: d.m, i: d.i, ...fLocalDist(SP, d) }));
+  LD.forEach(d => keys[d.m].push(cl(d.m, d.ta), cl(d.m, d.tb)));
+  const nodes = [];
+  const nodeAt = (x, y) => { for (let i = 0; i < nodes.length; i++) if (Math.hypot(nodes[i][0] - x, nodes[i][1] - y) < 1e-7) return i; nodes.push([x, y]); return nodes.length - 1; };
+  const mem = {};
+  for (const m of FM) {
+    const ts = []; keys[m].sort((a, b) => a - b).forEach(t => { if (!ts.length || t - ts[ts.length - 1] > EPS) ts.push(t); });
+    mem[m] = { ts, ids: ts.map(t => nodeAt(...fPoint(SP, m, t))) };
+  }
+  const nd = 3 * nodes.length;
+  const K = [...Array(nd)].map(() => new Array(nd).fill(0)), F = new Array(nd).fill(0), elems = [];
+  for (const m of FM) {
+    const [c, s] = G[m].d, { ts, ids } = mem[m];
+    for (let k = 0; k < ts.length - 1; k++) {
+      const l = ts[k + 1] - ts[k], a = EA / l, b12 = 12 * EI / l ** 3, b6 = 6 * EI / l ** 2, b4 = 4 * EI / l, b2 = 2 * EI / l;
+      const kl = [[a, 0, 0, -a, 0, 0], [0, b12, b6, 0, -b12, b6], [0, b6, b4, 0, -b6, b2], [-a, 0, 0, a, 0, 0], [0, -b12, -b6, 0, b12, -b6], [0, b6, b2, 0, -b6, b4]];
+      const T = [[c, s, 0, 0, 0, 0], [-s, c, 0, 0, 0, 0], [0, 0, 1, 0, 0, 0], [0, 0, 0, c, s, 0], [0, 0, 0, -s, c, 0], [0, 0, 0, 0, 0, 1]];
+      const fl = [0, 0, 0, 0, 0, 0];
+      for (const d of LD) if (d.m === m && d.ta <= ts[k] + EPS && d.tb >= ts[k + 1] - EPS) {
+        const wAt = t => d.w1 + (d.w2 - d.w1) * (t - d.ta) / (d.tb - d.ta), w1 = wAt(ts[k]), w2 = wAt(ts[k + 1]);
+        fl[1] += l * (7 * w1 + 3 * w2) / 20; fl[2] += l * l * (3 * w1 + 2 * w2) / 60;
+        fl[4] += l * (3 * w1 + 7 * w2) / 20; fl[5] -= l * l * (2 * w1 + 3 * w2) / 60;
+      }
+      const dofs = [3 * ids[k], 3 * ids[k] + 1, 3 * ids[k] + 2, 3 * ids[k + 1], 3 * ids[k + 1] + 1, 3 * ids[k + 1] + 2];
+      const kg = mmul(mtr(T), mmul(kl, T)), fg = mvec(mtr(T), fl);
+      for (let i = 0; i < 6; i++) { F[dofs[i]] += fg[i]; for (let j = 0; j < 6; j++) K[dofs[i]][dofs[j]] += kg[i][j]; }
+      elems.push({ m, k, kl, T, fl, dofs });
+    }
+  }
+  SP.points.forEach(p => { const i = nodeAt(...fPoint(SP, p.m, cl(p.m, fT(SP, p.m, p.s)))), g = fDir(p.m); F[3 * i] += g[0] * p.P; F[3 * i + 1] += g[1] * p.P; });
+  SP.moments.forEach(p => { const i = nodeAt(...fPoint(SP, p.m, cl(p.m, fT(SP, p.m, p.s)))); F[3 * i + 2] += p.C; });
+  const sup = { A: { i: nodeAt(0, 0), x: 0, y: 0 }, D: { i: nodeAt(SP.L, 0), x: SP.L, y: 0 } };
+  const restr = new Set();
+  for (const k of ['A', 'D']) SUP_DOF[SP.supports[k]].forEach(d => restr.add(3 * sup[k].i + d));
+  const free = []; for (let i = 0; i < nd; i++) if (!restr.has(i)) free.push(i);
+  const n = free.length, A = free.map(r => free.map(c => K[r][c]).concat([F[r]]));
+  let maxd = 0; for (let i = 0; i < nd; i++) maxd = Math.max(maxd, Math.abs(K[i][i]));
+  for (let col = 0; col < n; col++) {
+    let p = col; for (let r = col + 1; r < n; r++) if (Math.abs(A[r][col]) > Math.abs(A[p][col])) p = r;
+    if (Math.abs(A[p][col]) < 1e-11 * maxd) return { error: 'unstable' };
+    [A[col], A[p]] = [A[p], A[col]];
+    for (let r = 0; r < n; r++) { if (r === col) continue; const f = A[r][col] / A[col][col]; if (f) for (let c = col; c <= n; c++) A[r][c] -= f * A[col][c]; }
+  }
+  const u = new Array(nd).fill(0); free.forEach((d, i) => u[d] = A[i][n] / A[i][i]);
+  // comprobación de mecanismo: desplazamientos absurdamente grandes
+  if (u.some(v => !isFinite(v) || Math.abs(v) > 1e12)) return { error: 'unstable' };
+  const R = d => { if (!restr.has(d)) return 0; let s = -F[d]; for (let j = 0; j < nd; j++) s += K[d][j] * u[j]; return s; };
+  const reactions = {};
+  for (const k of ['A', 'D']) { const i = sup[k].i; reactions[k] = { type: SP.supports[k], x: sup[k].x, y: 0, Rx: R(3 * i), Ry: R(3 * i + 1), M: R(3 * i + 2) }; }
+  const start = {}, end = {};
+  for (const m of FM) {
+    const es = elems.filter(e => e.m === m), f = e => { const ul = mvec(e.T, e.dofs.map(d => u[d])); return mvec(e.kl, ul).map((v, i) => v - e.fl[i]); };
+    start[m] = f(es[0]).slice(0, 3); end[m] = f(es[es.length - 1]).slice(3);
+  }
+  return { mem, reactions, start, end, LD, nodes };
+}
+function frameLaws(SP, sol) {
+  const G = fGeom(SP), out = {};
+  for (const m of FM) {
+    const [c, s] = G[m].d, len = G[m].len, ts = sol.mem[m].ts, g = fDir(m);
+    const pts = SP.points.filter(p => p.m === m).map(p => { const t = fT(SP, m, p.s), gx = g[0] * p.P, gy = g[1] * p.P; return { t, px: c * gx + s * gy, py: -s * gx + c * gy }; }).filter(p => p.t > EPS && p.t < len - EPS);
+    const cps = SP.moments.filter(p => p.m === m).map(p => ({ t: fT(SP, m, p.s), C: p.C })).filter(p => p.t > EPS && p.t < len - EPS);
+    const lds = sol.LD.filter(d => d.m === m).map(d => { const be = (d.w2 - d.w1) / (d.tb - d.ta), al = d.w1 - be * d.ta; return { ...d, al, be, W: al * (d.tb - d.ta) + be * (d.tb ** 2 - d.ta ** 2) / 2, Sx: al * (d.tb ** 2 - d.ta ** 2) / 2 + be * (d.tb ** 3 - d.ta ** 3) / 3 }; });
+    const [fx0, fy0, m0] = sol.start[m];
+    const segs = [];
+    for (let k = 0; k < ts.length - 1; k++) {
+      const x1 = ts[k], x2 = ts[k + 1], xm = (x1 + x2) / 2;
+      let N = [-fx0], V = [fy0], M = [-m0, fy0], Q = [0];
+      for (const p of pts) if (p.t < xm) { N = padd(N, [-p.px]); V = padd(V, [p.py]); M = padd(M, [-p.py * p.t, p.py]); }
+      for (const p of cps) if (p.t < xm) M = padd(M, [-p.C]);
+      for (const d of lds) {
+        if (d.ta >= xm) continue;
+        const { al, be, ta: a } = d;
+        if (d.tb > xm) {
+          Q = padd(Q, [al, be]);
+          V = padd(V, [-al * a - be * a * a / 2, al, be / 2]);
+          M = padd(M, [al * a * a / 2 + be * a ** 3 / 3, -al * a - be * a * a / 2, al / 2, be / 6]);
+        } else { V = padd(V, [d.W]); M = padd(M, [-d.Sx, d.W]); }
+      }
+      const clean = p => p.map(v => Math.abs(v) < 1e-9 ? 0 : v);
+      segs.push({ x1, x2, N: clean(N), V: clean(V), M: clean(M), Q: clean(Q) });
+    }
+    out[m] = segs;
+  }
+  return out;
+}
+
 // ======================= CORE-END =======================
 
 const $ = id => document.getElementById(id);
@@ -446,6 +595,7 @@ function generate() {
 // ---------------- Tablas editables ----------------
 function numIn(path, v, step = 0.5) { return `<input type="number" step="${step}" data-k="${path}" value="${r6(v)}">`; }
 function renderTables() {
+  if (MODE === 'frame') return renderFrameTables();
   const sTypeSel = (i, t) => `<select data-k="supports.${i}.type">${Object.entries(TYPES).map(([k, n]) => `<option value="${k}" ${k === t ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
   const qTypeSel = (i, t) => `<select data-k="dists.${i}.type">${Object.entries(QTYPES).map(([k, n]) => `<option value="${k}" ${k === t ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
   const del = p => `<button class="del" data-del="${p}" title="Eliminar">✕</button>`;
@@ -479,6 +629,7 @@ function normalize(editedKey) {
   });
 }
 $('dataTables').addEventListener('change', e => {
+  if (MODE === 'frame') return frameTableChange(e);
   const k = e.target.dataset.k; if (!k) return;
   const parts = k.split('.'); let o = S;
   for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
@@ -488,6 +639,7 @@ $('dataTables').addEventListener('change', e => {
   normalize(k); renderTables(); update();
 });
 $('dataTables').addEventListener('click', e => {
+  if (MODE === 'frame') return frameTableClick(e);
   const d = e.target.dataset;
   if (d.del) { const [arr, i] = d.del.split('.'); S[arr].splice(+i, 1); }
   else if (d.add) {
@@ -642,6 +794,8 @@ function fmtPoly(c) {
 
 // ---------------- Solución ----------------
 function renderSolution() {
+  $('solNwrap').hidden = MODE !== 'frame'; $('mDownLbl').hidden = MODE === 'frame';
+  if (MODE === 'frame') { $('solQwrap').hidden = true; return renderFrameSolution(); }
   const sol = solve(S), head = $('solHead'), body = $('solBody');
   const nRv = S.supports.reduce((a, s) => a + (s.type === 'fixed' ? 2 : 1), 0), g = nRv - 2;
   const nRt = S.supports.reduce((a, s) => a + ({ fixed: 3, pin: 2, roller: 1 })[s.type], 0) - 3;
@@ -737,12 +891,362 @@ function renderSolution() {
 }
 
 function update() {
-  $('beamSvg').innerHTML = drawBeam(S, null);
+  $('beamSvg').innerHTML = MODE === 'frame' ? drawFrame(SP, null) : drawBeam(S, null);
   $('solution').hidden = !showSol;
   $('toggleSol').textContent = showSol ? '🙈 Ocultar solución' : '👁 Mostrar solución';
   if (showSol) renderSolution();
   if (typeof refreshPreview === 'function') refreshPreview();
 }
+
+// ---------------- PÓRTICOS (interfaz) ----------------
+const MLBL = { cL: 'Pilar izq. (A–B)', b: 'Dintel (B–C)', cR: 'Pilar der. (C–D)' };
+const MLONG = { cL: 'Pilar izquierdo A→B', b: 'Dintel B→C', cR: 'Pilar derecho C→D' };
+const MCOORD = { cL: 's medida desde A hacia arriba', b: 's medida desde B hacia la derecha', cR: 's medida desde C hacia abajo' };
+const FTYPES = { fixed: 'Empotramiento', pin: 'Apoyo fijo (articulado)', roller: 'Apoyo móvil (deslizante)', free: 'Libre (sin apoyo)' };
+let SP = null;
+const fLen = (m) => m === 'b' ? SP.L : SP.H;
+
+function generateFrame() {
+  const L = $('fLr').checked ? pick([4, 5, 6, 6, 8]) : Math.max(1, +$('fL').value || 6);
+  const H = $('fHr').checked ? pick([3, 4, 4, 5]) : Math.max(1, +$('fH').value || 4);
+  $('fL').value = L; $('fH').value = H;
+  let A = $('fSupA').value, D = $('fSupD').value;
+  if (A === 'random' || D === 'random') {
+    const combos = [['pin', 'roller'], ['pin', 'roller'], ['fixed', 'fixed'], ['pin', 'pin'], ['fixed', 'free'], ['fixed', 'pin'], ['roller', 'pin'], ['fixed', 'roller']]
+      .filter(c => (A === 'random' || c[0] === A) && (D === 'random' || c[1] === D));
+    const c = combos.length ? pick(combos) : ['pin', 'roller'];
+    if (A === 'random') A = c[0]; if (D === 'random') D = c[1];
+  }
+  const grid = (len, step) => { const g = []; for (let x = step; x <= len + EPS; x += step) g.push(r6(x)); return g; };
+  const st = v => v <= 6 ? 0.5 : 1, up = $('fUp').checked, vals = [5, 10, 10, 15, 20, 25, 30, 40], qv = [2, 3, 4, 5, 6, 8, 10, 12, 15];
+  const used = { cL: new Set(), b: new Set(), cR: new Set() };
+  const take = (m, g) => { const c = shuffle(g.filter(x => !used[m].has(x))); if (!c.length) return null; used[m].add(c[0]); return c[0]; };
+  const points = [], moments = [], dists = [];
+  for (let i = 0; i < +$('fnPb').value; i++) {
+    const s = take('b', grid(L, st(L)).filter(x => x < L - EPS)); if (s === null) break;
+    points.push({ m: 'b', s, P: (up && Math.random() < 0.2 ? 1 : -1) * pick(vals) });
+  }
+  for (let i = 0; i < +$('fnPc').value; i++) {
+    const m = pick(['cL', 'cL', 'cR']), s = take(m, grid(H, st(H))); if (s === null) continue;
+    points.push({ m, s, P: (up && Math.random() < 0.3 ? -1 : 1) * pick([5, 10, 10, 15, 20]) });
+  }
+  for (let i = 0; i < +$('fnM').value; i++) {
+    const m = pick(FM), len = m === 'b' ? L : H, s = take(m, grid(len, st(len)).filter(x => x < len - EPS)); if (s === null) continue;
+    moments.push({ m, s, C: pick([5, 10, 15, 20, 30]) * (Math.random() < 0.5 ? 1 : -1) });
+  }
+  const mkDist = (m, sel, sign) => {
+    const len = m === 'b' ? L : H, type = sel === 'random' ? pick(Object.keys(QTYPES)) : sel;
+    let a = 0, b = len;
+    if (Math.random() > (m === 'b' ? 0.5 : 0.7)) { const g = [0, ...grid(len, st(len))], pairs = []; g.forEach(x1 => g.forEach(x2 => { if (x2 - x1 >= Math.max(1, len / 3) - EPS) pairs.push([x1, x2]); })); [a, b] = pick(pairs); }
+    let q1 = pick(qv), q2 = q1;
+    if (type === 'triUp') q1 = 0; if (type === 'triDown') q2 = 0;
+    if (type === 'trap') { do { q2 = pick(qv); } while (q2 === q1); }
+    const sg = (up && Math.random() < 0.25) ? -sign : sign;
+    dists.push({ m, type, a, b, q1: sg * q1, q2: sg * q2 });
+  };
+  document.querySelectorAll('.fqbType').forEach(s => mkDist('b', s.value, -1));
+  document.querySelectorAll('.fqcType').forEach(s => mkDist(pick(['cL', 'cL', 'cR']), s.value, 1));
+  SP = { L, H, supports: { A, D }, points, moments, dists };
+  showSol = false;
+  renderTables(); update();
+}
+
+function normalizeFrame(k) {
+  SP.L = Math.max(0.5, SP.L || 1); SP.H = Math.max(0.5, SP.H || 1);
+  const cl = (m, x) => Math.min(fLen(m), Math.max(0, isFinite(x) ? x : 0));
+  SP.points.forEach(p => { p.s = cl(p.m, p.s); p.P = isFinite(p.P) ? p.P : 0; });
+  SP.moments.forEach(p => { p.s = cl(p.m, p.s); p.C = isFinite(p.C) ? p.C : 0; });
+  SP.dists.forEach((d, i) => {
+    d.a = cl(d.m, d.a); d.b = cl(d.m, d.b); if (d.a > d.b) [d.a, d.b] = [d.b, d.a];
+    d.q1 = isFinite(d.q1) ? d.q1 : 0; d.q2 = isFinite(d.q2) ? d.q2 : 0;
+    const kk = k && k.startsWith(`dists.${i}.`) ? k.split('.')[2] : null;
+    if (kk === 'm') { d.a = 0; d.b = fLen(d.m); }
+    if (d.type === 'uniform') { if (kk === 'q2') d.q1 = d.q2; else d.q2 = d.q1; }
+    if (d.type === 'triUp' && (kk === 'type' || d.q1 !== 0)) { d.q2 = d.q2 || d.q1; d.q1 = 0; }
+    if (d.type === 'triDown' && (kk === 'type' || d.q2 !== 0)) { d.q1 = d.q1 || d.q2; d.q2 = 0; }
+  });
+}
+
+function renderFrameTables() {
+  const ni = (p, v, st = 0.5) => `<input type="number" step="${st}" data-fk="${p}" value="${r6(v)}">`;
+  const mSel = (p, v) => `<select data-fk="${p}">${FM.map(m => `<option value="${m}" ${m === v ? 'selected' : ''}>${MLBL[m]}</option>`).join('')}</select>`;
+  const sSel = (p, v) => `<select data-fk="${p}">${Object.entries(FTYPES).map(([k, n]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
+  const qSel = (p, v) => `<select data-fk="${p}">${Object.entries(QTYPES).map(([k, n]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
+  const del = p => `<button class="del" data-fdel="${p}" title="Eliminar">✕</button>`;
+  let h = `<div class="row" style="margin:6px 0;gap:18px"><span><b>Luz L (m):</b> ${ni('L', SP.L)}</span><span><b>Altura H (m):</b> ${ni('H', SP.H)}</span>
+    <span><b>Apoyo A:</b> ${sSel('supports.A', SP.supports.A)}</span><span><b>Apoyo D:</b> ${sSel('supports.D', SP.supports.D)}</span></div>
+    <div class="note">Posición: en los pilares, altura y desde la base; en el dintel, x desde B. Signos: fuerzas en el dintel + hacia arriba ↑; en los pilares + hacia la derecha →; momentos + antihorario ↺.</div><div class="tables">`;
+  h += `<div><h4>Cargas puntuales</h4><table><tr><th></th><th>Barra</th><th>posición (m)</th><th>P (kN)</th><th></th></tr>` +
+    SP.points.map((p, i) => `<tr><td><b>P${i + 1}</b></td><td>${mSel(`points.${i}.m`, p.m)}</td><td>${ni(`points.${i}.s`, p.s)}</td><td>${ni(`points.${i}.P`, p.P, 1)}</td><td>${del('points.' + i)}</td></tr>`).join('') +
+    `</table><button class="mini sec" data-fadd="points">+ carga</button></div>`;
+  h += `<div><h4>Momentos puntuales (+ antihorario ↺)</h4><table><tr><th></th><th>Barra</th><th>posición (m)</th><th>M (kN·m)</th><th></th></tr>` +
+    SP.moments.map((p, i) => `<tr><td><b>M${i + 1}</b></td><td>${mSel(`moments.${i}.m`, p.m)}</td><td>${ni(`moments.${i}.s`, p.s)}</td><td>${ni(`moments.${i}.C`, p.C, 1)}</td><td>${del('moments.' + i)}</td></tr>`).join('') +
+    `</table><button class="mini sec" data-fadd="moments">+ momento</button></div>`;
+  h += `<div style="grid-column:1/-1"><h4>Cargas distribuidas (kN/m)</h4><table><tr><th></th><th>Barra</th><th>Tipo</th><th>desde (m)</th><th>hasta (m)</th><th>q inicio</th><th>q fin</th><th></th></tr>` +
+    SP.dists.map((d, i) => `<tr><td><b>q${i + 1}</b></td><td>${mSel(`dists.${i}.m`, d.m)}</td><td>${qSel(`dists.${i}.type`, d.type)}</td><td>${ni(`dists.${i}.a`, d.a)}</td><td>${ni(`dists.${i}.b`, d.b)}</td><td>${ni(`dists.${i}.q1`, d.q1, 1)}</td><td>${ni(`dists.${i}.q2`, d.q2, 1)}</td><td>${del('dists.' + i)}</td></tr>`).join('') +
+    `</table><button class="mini sec" data-fadd="dists">+ distribuida</button></div></div>`;
+  $('dataTables').innerHTML = h;
+}
+function frameTableChange(e) {
+  const k = e.target.dataset.fk; if (!k) return;
+  const parts = k.split('.'); let o = SP;
+  for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
+  const last = parts[parts.length - 1];
+  o[last] = e.target.tagName === 'SELECT' ? e.target.value : parseFloat(e.target.value);
+  normalizeFrame(k); renderFrameTables(); update();
+}
+function frameTableClick(e) {
+  const d = e.target.dataset;
+  if (d.fdel) { const [arr, i] = d.fdel.split('.'); SP[arr].splice(+i, 1); }
+  else if (d.fadd) {
+    const def = { points: { m: 'b', s: SP.L / 2, P: -10 }, moments: { m: 'b', s: SP.L / 2, C: 10 }, dists: { m: 'b', type: 'uniform', a: 0, b: SP.L, q1: -5, q2: -5 } };
+    SP[d.fadd].push(def[d.fadd]);
+  } else return;
+  renderFrameTables(); update();
+}
+
+// ---------- dibujo ----------
+function frameXf(SP, extra = 0) {
+  const W = 1000, sc = Math.min(520 / SP.L, 300 / SP.H), fw = SP.L * sc, fh = SP.H * sc;
+  const ox = (W - fw) / 2, oy = 150 + extra + fh;
+  return { W, sc, ox, oy, Hs: oy + 115, X: x => ox + x * sc, Y: y => oy - y * sc };
+}
+const OUTN = { cL: [-1, 0], b: [0, -1], cR: [1, 0] };            // normal exterior (coordenadas SVG)
+const DIRS = m => m === 'b' ? [0, -1] : [1, 0];                    // sentido + de la carga (SVG)
+function arrowSvg(x1, y1, x2, y2, col, mk, w = 2.4) { return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="${w}" marker-end="url(#${mk})"/>`; }
+function drawFrame(SP, sol) {
+  const tf = frameXf(SP), { X, Y, W } = tf, L = SP.L, H = SP.H, fbd = !!sol;
+  const P = (m, u) => { const p = fPoint(SP, m, fT(SP, m, u)); return [X(p[0]), Y(p[1])]; };
+  let g = '';
+  // distribuidas (en el exterior de cada barra, apiladas)
+  const dl = fValidDists(SP), tiers = { cL: [], b: [], cR: [] };
+  const qmax = Math.max(1e-9, ...dl.flatMap(d => [Math.abs(d.q1), Math.abs(d.q2)]));
+  dl.forEach(d => {
+    const T = tiers[d.m]; let t = 0; while (T[t] && T[t].some(o => d.a < o.b - 1e-9 && d.b > o.a + 1e-9)) t++; (T[t] = T[t] || []).push(d);
+    const n = OUTN[d.m], e = DIRS(d.m), off = 10 + t * 72, hmax = 46;
+    const qAtU = u => d.q1 + (d.q2 - d.q1) * (u - d.a) / (d.b - d.a);
+    const cuts = [d.a]; if (d.q1 * d.q2 < 0) cuts.push(d.a + (d.b - d.a) * d.q1 / (d.q1 - d.q2)); cuts.push(d.b);
+    const bp = u => { const p = P(d.m, u); return [p[0] + n[0] * off, p[1] + n[1] * off]; };
+    const tp = u => { const b = bp(u), h = Math.abs(qAtU(u)) / qmax * hmax; return [b[0] + n[0] * h, b[1] + n[1] * h]; };
+    for (let c = 0; c < cuts.length - 1; c++) {
+      const u1 = cuts[c], u2 = cuts[c + 1], upq = qAtU((u1 + u2) / 2), dn = e[0] * n[0] + e[1] * n[1];
+      const toward = (upq > 0 ? dn : -dn) < 0, col = d.m === 'b' ? (upq < 0 ? '#1565c0' : '#e65100') : (upq > 0 ? '#2e5d9f' : '#e65100');
+      const pts = [bp(u1), bp(u2), tp(u2), tp(u1)].map(p => p.join(',')).join(' ');
+      g += `<polygon points="${pts}" fill="${col}" fill-opacity=".12" stroke="${col}" stroke-width="1.4"/>`;
+      const len = Math.hypot(bp(u2)[0] - bp(u1)[0], bp(u2)[1] - bp(u1)[1]), nA = Math.max(1, Math.round(len / 24));
+      for (let i = 0; i <= nA; i++) {
+        const u = u1 + (u2 - u1) * i / nA, b = bp(u), tt = tp(u);
+        if (Math.hypot(tt[0] - b[0], tt[1] - b[1]) > 6) g += toward ? arrowSvg(tt[0], tt[1], b[0], b[1], col, col === '#e65100' ? 'ah-org' : 'ah-blue', 1.3) : arrowSvg(b[0], b[1], tt[0], tt[1], col, col === '#e65100' ? 'ah-org' : 'ah-blue', 1.3);
+      }
+    }
+    const um = (d.a + d.b) / 2, bm = bp(um), hm = Math.max(Math.abs(d.q1), Math.abs(d.q2)) / qmax * hmax;
+    const lp = [bm[0] + n[0] * (hm + 14), bm[1] + n[1] * (hm + 14)];
+    const lbl = Math.abs(d.q1 - d.q2) < 1e-9 ? `q${d.i + 1} = ${fmt(d.q1)}` : `q${d.i + 1}: ${fmt(d.q1)}→${fmt(d.q2)}`;
+    g += `<text x="${lp[0]}" y="${lp[1] + 4}" text-anchor="${d.m === 'cL' ? 'end' : d.m === 'cR' ? 'start' : 'middle'}" font-size="13" fill="#0d47a1" class="halo">${lbl} kN/m</text>`;
+  });
+  // barras
+  g += `<polyline points="${X(0)},${Y(0)} ${X(0)},${Y(H)} ${X(L)},${Y(H)} ${X(L)},${Y(0)}" fill="none" stroke="#546e7a" stroke-width="9" stroke-linejoin="miter"/>`;
+  g += `<polyline points="${X(0) + 9},${Y(0)} ${X(0) + 9},${Y(H) + 9} ${X(L) - 9},${Y(H) + 9} ${X(L) - 9},${Y(0)}" fill="none" stroke="#90a4ae" stroke-width="1.2" stroke-dasharray="5 4"/>`;
+  [['A', 0, 0, -34, 20], ['B', 0, H, -16, -10], ['C', L, H, 16, -10], ['D', L, 0, 34, 20]].forEach(([n, x, y, dx, dy]) => g += `<text x="${X(x) + dx}" y="${Y(y) + dy}" text-anchor="middle" font-size="16" font-weight="700" fill="#263238" class="halo">${n}</text>`);
+  // apoyos o reacciones
+  for (const k of ['A', 'D']) {
+    const t = SP.supports[k], cx = X(k === 'A' ? 0 : L), by = Y(0) + 5;
+    if (!fbd) {
+      if (t === 'fixed') { g += `<line x1="${cx - 24}" y1="${by}" x2="${cx + 24}" y2="${by}" stroke="#37474f" stroke-width="3"/>`; for (let x = cx - 22; x <= cx + 20; x += 8) g += `<line x1="${x}" y1="${by}" x2="${x - 8}" y2="${by + 10}" stroke="#37474f" stroke-width="1.2"/>`; }
+      else if (t === 'pin' || t === 'roller') {
+        const th = t === 'pin' ? 22 : 15, gy = t === 'pin' ? by + 22 : by + 25;
+        g += `<polygon points="${cx},${by - 4} ${cx - 14},${by + th} ${cx + 14},${by + th}" fill="#eceff1" stroke="#37474f" stroke-width="1.6"/>`;
+        if (t === 'roller') g += `<circle cx="${cx - 7}" cy="${by + 19.5}" r="4" fill="#fff" stroke="#37474f" stroke-width="1.4"/><circle cx="${cx + 7}" cy="${by + 19.5}" r="4" fill="#fff" stroke="#37474f" stroke-width="1.4"/>`;
+        g += `<line x1="${cx - 20}" y1="${gy}" x2="${cx + 20}" y2="${gy}" stroke="#37474f" stroke-width="1.6"/>`;
+        for (let x = cx - 18; x <= cx + 16; x += 7) g += `<line x1="${x}" y1="${gy}" x2="${x - 6}" y2="${gy + 7}" stroke="#37474f" stroke-width="1"/>`;
+      }
+    } else {
+      const r = sol.reactions[k], gr = '#2e7d32', sd = k === 'A' ? -1 : 1;
+      if (Math.abs(r.Ry) > 1e-9) { const upw = r.Ry > 0; g += arrowSvg(cx, upw ? by + 62 : by, cx, upw ? by : by + 62, gr, 'ah-grn'); g += `<text x="${cx}" y="${by + 80}" text-anchor="middle" font-size="13" font-weight="600" fill="#1b5e20" class="halo">V${k} = ${fmt(Math.abs(r.Ry))} kN ${upw ? '↑' : '↓'}</text>`; }
+      if (Math.abs(r.Rx) > 1e-9) { const rt = r.Rx > 0, x0 = cx + sd * 70, x1 = cx + sd * 6; g += rt === (sd < 0) ? arrowSvg(x0, by - 6, x1, by - 6, gr, 'ah-grn') : arrowSvg(x1, by - 6, x0, by - 6, gr, 'ah-grn'); g += `<text x="${cx + sd * 76}" y="${by - 12}" text-anchor="${sd < 0 ? 'end' : 'start'}" font-size="13" font-weight="600" fill="#1b5e20" class="halo">H${k} = ${fmt(Math.abs(r.Rx))} kN ${rt ? '→' : '←'}</text>`; }
+      if (Math.abs(r.M) > 1e-9) { const rr = 26, ccw = r.M > 0, cy = by - 4; g += `<path d="${ccw ? `M${cx - rr},${cy} A${rr},${rr} 0 0 0 ${cx + rr},${cy}` : `M${cx + rr},${cy} A${rr},${rr} 0 0 1 ${cx - rr},${cy}`}" fill="none" stroke="${gr}" stroke-width="2.2" marker-end="url(#ah-grn)"/>`; g += `<text x="${cx + sd * 34}" y="${by + 40}" text-anchor="${sd < 0 ? 'end' : 'start'}" font-size="13" font-weight="600" fill="#1b5e20" class="halo">M${k} = ${fmt(Math.abs(r.M))} kN·m ${ccw ? '↺' : '↻'}</text>`; }
+    }
+  }
+  // cargas puntuales
+  SP.points.forEach((p, i) => {
+    const n = OUTN[p.m], e = DIRS(p.m), pt = P(p.m, p.s), sgn = p.P >= 0 ? 1 : -1, toward = sgn * (e[0] * n[0] + e[1] * n[1]) < 0;
+    const b = [pt[0] + n[0] * 6, pt[1] + n[1] * 6], t = [pt[0] + n[0] * 76, pt[1] + n[1] * 76];
+    g += toward ? arrowSvg(t[0], t[1], b[0], b[1], '#c62828', 'ah-red', 2.8) : arrowSvg(b[0], b[1], t[0], t[1], '#c62828', 'ah-red', 2.8);
+    const arr = p.m === 'b' ? (p.P >= 0 ? '↑' : '↓') : (p.P >= 0 ? '→' : '←');
+    g += `<text x="${t[0] + n[0] * 8}" y="${t[1] + n[1] * 8 + (p.m === 'b' ? -2 : 4)}" text-anchor="${p.m === 'cL' ? 'end' : p.m === 'cR' ? 'start' : 'middle'}" font-size="13" font-weight="600" fill="#b71c1c" class="halo">P${i + 1} = ${fmt(Math.abs(p.P))} kN ${arr}</text>`;
+  });
+  // momentos
+  SP.moments.forEach((p, i) => {
+    const [cx, cy] = P(p.m, p.s), rr = 22, ccw = p.C >= 0;
+    g += `<path d="${ccw ? `M${cx + rr},${cy - 2} A${rr},${rr} 0 0 0 ${cx - rr},${cy - 2}` : `M${cx - rr},${cy - 2} A${rr},${rr} 0 0 1 ${cx + rr},${cy - 2}`}" fill="none" stroke="#6a1b9a" stroke-width="2.4" marker-end="url(#ah-mag)"/><circle cx="${cx}" cy="${cy}" r="3" fill="#6a1b9a"/>`;
+    g += `<text x="${cx + (p.m === 'cR' ? -28 : 28)}" y="${cy + 30}" text-anchor="${p.m === 'cR' ? 'end' : 'start'}" font-size="13" font-weight="600" fill="#4a148c" class="halo">M${i + 1} = ${fmt(Math.abs(p.C))} kN·m ${ccw ? '↺' : '↻'}</text>`;
+  });
+  // cotas
+  const dimY = Y(0) + (fbd ? 100 : 62), keysX = [0, L, ...SP.points.filter(p => p.m === 'b').map(p => p.s), ...SP.moments.filter(p => p.m === 'b').map(p => p.s), ...dl.filter(d => d.m === 'b').flatMap(d => [d.a, d.b])];
+  const dimLine = (vals, horiz, pos, len) => {
+    const v = [...new Set(vals.map(r6))].filter(x => x >= -EPS && x <= len + EPS).sort((a, b) => a - b); let s = '';
+    if (horiz) { s += `<line x1="${X(0)}" y1="${pos}" x2="${X(L)}" y2="${pos}" stroke="#78909c"/>`; v.forEach(x => s += `<line x1="${X(x)}" y1="${pos - 5}" x2="${X(x)}" y2="${pos + 5}" stroke="#78909c" stroke-width="1.2"/>`); for (let k = 0; k < v.length - 1; k++) if ((v[k + 1] - v[k]) * tf.sc > 18) s += `<text x="${(X(v[k]) + X(v[k + 1])) / 2}" y="${pos - 5}" text-anchor="middle" font-size="12" fill="#455a64">${fmt(v[k + 1] - v[k])}</text>`; }
+    else { s += `<line x1="${pos}" y1="${Y(0)}" x2="${pos}" y2="${Y(H)}" stroke="#78909c"/>`; v.forEach(y => s += `<line x1="${pos - 5}" y1="${Y(y)}" x2="${pos + 5}" y2="${Y(y)}" stroke="#78909c" stroke-width="1.2"/>`); for (let k = 0; k < v.length - 1; k++) if ((v[k + 1] - v[k]) * tf.sc > 14) s += `<text x="${pos + (pos < 500 ? -6 : 6)}" y="${(Y(v[k]) + Y(v[k + 1])) / 2 + 4}" text-anchor="${pos < 500 ? 'end' : 'start'}" font-size="12" fill="#455a64">${fmt(v[k + 1] - v[k])}</text>`; }
+    return s;
+  };
+  g += dimLine(keysX, true, dimY, L) + `<text x="${(X(0) + X(L)) / 2}" y="${dimY + 20}" text-anchor="middle" font-size="13">L = ${fmt(L)} m</text>`;
+  const kc = m => [0, H, ...SP.points.filter(p => p.m === m).map(p => p.s), ...SP.moments.filter(p => p.m === m).map(p => p.s), ...dl.filter(d => d.m === m).flatMap(d => [d.a, d.b])];
+  g += dimLine(kc('cL'), false, 40, H) + dimLine(kc('cR'), false, W - 40, H);
+  g += `<text x="16" y="${(Y(0) + Y(H)) / 2}" font-size="13" transform="rotate(-90 16 ${(Y(0) + Y(H)) / 2})" text-anchor="middle">H = ${fmt(H)} m</text>`;
+  return `<svg viewBox="0 0 ${W} ${tf.Hs + (fbd ? 40 : 0)}" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif">${g}</svg>`;
+}
+
+// diagrama N, V o M dibujado sobre el pórtico
+const INN = { cL: [1, 0], b: [0, 1], cR: [-1, 0] };   // normal interior (SVG)
+function frameDiagram(SP, laws, which) {
+  const tf = frameXf(SP, -45), { X, Y, W } = tf, amp = 62, G = fGeom(SP);
+  const dirn = m => which === 'M' ? INN[m] : OUTN[m];   // M: lado traccionado; N y V: + hacia el exterior
+  let vmax = 0;
+  for (const m of FM) laws[m].forEach(s => { for (let i = 0; i <= 20; i++) vmax = Math.max(vmax, Math.abs(pev(s[which], s.x1 + (s.x2 - s.x1) * i / 20))); });
+  if (vmax < 1e-9) vmax = 1;
+  const k = amp / vmax, cP = '#1565c0', cN = '#c62828';
+  let g = '', lab = '';
+  const sp = (m, t) => { const p = fPoint(SP, m, t); return [X(p[0]), Y(p[1])]; };
+  for (const m of FM) {
+    const n = dirn(m);
+    laws[m].forEach(s => {
+      const np = Math.max(2, Math.ceil((s.x2 - s.x1) / G[m].len * 60)), pts = [];
+      for (let i = 0; i <= np; i++) { const t = s.x1 + (s.x2 - s.x1) * i / np, v = pev(s[which], t), b = sp(m, t); pts.push({ b, v, o: [b[0] + n[0] * v * k, b[1] + n[1] * v * k] }); }
+      for (let i = 0; i < np; i++) {
+        const a = pts[i], c = pts[i + 1], col = (a.v + c.v) >= 0 ? cP : cN;
+        g += `<polygon points="${a.b.join(',')} ${c.b.join(',')} ${c.o.join(',')} ${a.o.join(',')}" fill="${col}" fill-opacity=".2" stroke="none"/>`;
+      }
+      g += `<polyline points="${pts[0].b.join(',')} ${pts.map(p => p.o.join(',')).join(' ')} ${pts[np].b.join(',')}" fill="none" stroke="#263238" stroke-width="1.6"/>`;
+      if (which === 'M') rootsIn(s.V, s.x1, s.x2).forEach(t => {
+        const v = pev(s.M, t); if (Math.abs(v) < 1e-6) return;
+        const b = sp(m, t), o = [b[0] + n[0] * v * k, b[1] + n[1] * v * k], sg = v >= 0 ? 1 : -1;
+        lab += `<circle cx="${o[0]}" cy="${o[1]}" r="4" fill="#ff8f00"/><text x="${o[0] + n[0] * sg * 16}" y="${o[1] + n[1] * sg * 16 + 4}" text-anchor="middle" font-size="12" font-weight="700" fill="#e65100" class="halo">${fmt(v)} (s=${fmt(t)})</text>`;
+      });
+    });
+  }
+  for (const m of FM) {                                   // etiquetas sin duplicar en los nudos
+    const n = dirn(m), sg = laws[m], along = G[m].d, L1 = [];
+    sg.forEach((s, k) => {
+      const vs = pev(s[which], s.x1), ve = pev(s[which], s.x2);
+      if (k === 0) L1.push([s.x1, vs, 1]);
+      const nx = sg[k + 1];
+      if (!nx) L1.push([s.x2, ve, -1]);
+      else { const vn = pev(nx[which], nx.x1); if (Math.abs(vn - ve) < 1e-6) L1.push([s.x2, ve, 0]); else { L1.push([s.x2, ve, -1]); L1.push([s.x2, vn, 1]); } }
+    });
+    L1.forEach(([t, v, side]) => {
+      if (Math.abs(v) < 0.005) return;
+      const b = sp(m, t), sgv = v >= 0 ? 1 : -1, o = [b[0] + n[0] * (v * k + sgv * 14), b[1] + n[1] * (v * k + sgv * 14)], sh = side * 16;
+      lab += `<text x="${o[0] + along[0] * sh}" y="${o[1] - along[1] * sh + 4}" text-anchor="middle" font-size="12" font-weight="600" fill="${v >= 0 ? cP : cN}" class="halo">${fmt(v)}</text>`;
+    });
+  }
+  g += `<polyline points="${X(0)},${Y(0)} ${X(0)},${Y(SP.H)} ${X(SP.L)},${Y(SP.H)} ${X(SP.L)},${Y(0)}" fill="none" stroke="#37474f" stroke-width="2.5"/>`;
+  [['A', 0, 0, -14, 18], ['B', 0, SP.H, -14, -8], ['C', SP.L, SP.H, 14, -8], ['D', SP.L, 0, 14, 18]].forEach(([nn, x, y, dx, dy]) => g += `<text x="${X(x) + dx}" y="${Y(y) + dy}" text-anchor="middle" font-size="14" font-weight="700" fill="#263238">${nn}</text>`);
+  const unit = which === 'M' ? 'kN·m' : 'kN', tit = { N: 'N (kN) · + tracción, dibujado hacia el exterior', V: 'V (kN) · + hacia el exterior', M: 'M (kN·m) · dibujado del lado traccionado' }[which];
+  g += `<text x="10" y="18" font-size="13" font-weight="700" fill="#37474f">${tit}</text>`;
+  return `<svg viewBox="0 0 ${W} ${tf.Hs - 30}" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif">${g}${lab}</svg>`;
+}
+
+// ---------- solución ----------
+function renderFrameSolution() {
+  const sol = solveFrame(SP), head = $('solHead'), body = $('solBody');
+  const nR = SUP_DOF[SP.supports.A].length + SUP_DOF[SP.supports.D].length, g = nR - 3;
+  if (sol.error) { head.innerHTML = `<div class="warn"><b>No se puede resolver.</b> El pórtico es un mecanismo (inestable) con estos apoyos: puede desplazarse o girar libremente. Prueba, por ejemplo, articulado + deslizante o un empotramiento.</div>`; body.hidden = true; return; }
+  body.hidden = false;
+  head.innerHTML = `<p>${g === 0 ? '<span class="badge">Pórtico isostático</span>' : `<span class="badge h">Pórtico hiperestático de grado ${g}</span>`} <span class="note">(${nR} reacciones; 3 ecuaciones de equilibrio: ΣF<sub>x</sub> = 0, ΣF<sub>y</sub> = 0, ΣM = 0)</span></p>`;
+  const laws = frameLaws(SP, sol), R = sol.reactions;
+  $('solFbd').innerHTML = drawFrame(SP, sol);
+  // fuerzas exteriores (para las ecuaciones)
+  const Fl = [], dists = fValidDists(SP);
+  SP.points.forEach((p, i) => { const g2 = fDir(p.m), pt = fPoint(SP, p.m, fT(SP, p.m, p.s)); Fl.push({ x: pt[0], y: pt[1], Fx: g2[0] * p.P, Fy: g2[1] * p.P }); });
+  const res = dists.map(d => ({ d, ...fResultant(SP, d) }));
+  res.forEach(r => Fl.push({ x: r.x, y: r.y, Fx: r.Fx, Fy: r.Fy }));
+  const Cl = SP.moments.map(p => p.C);
+  let st = '';
+  if (res.length) st += `<h3>Paso 1 · Resultantes de las cargas distribuidas</h3><table><tr><th></th><th>Barra</th><th>Tipo</th><th>Resultante (kN)</th><th>Sentido</th><th>Punto de aplicación (x, y)</th></tr>` +
+    res.map(r => `<tr><td><b>Q${r.d.i + 1}</b></td><td>${MLBL[r.d.m]}</td><td>${QTYPES[r.d.type]}</td><td>${fmt(Math.abs(r.W))}</td><td>${r.d.m === 'b' ? (r.W >= 0 ? '↑' : '↓') : (r.W >= 0 ? '→' : '←')}</td><td>(${fmt(r.x)}, ${fmt(r.y)})</td></tr>`).join('') + `</table>`;
+  const arm = v => v < 0 ? `(${fmt(v)})` : fmt(v);
+  const sj = t => t.length ? t.map((e, k) => (k ? (e.neg ? ' − ' : ' + ') : (e.neg ? '−' : '')) + e.s).join('') : '0';
+  const tail = (xO, yO) => {
+    const t = [];
+    Fl.forEach(f => { if (Math.abs(f.Fy) > 1e-12) t.push({ neg: f.Fy < 0, s: `${fmt(Math.abs(f.Fy))}·${arm(f.x - xO)}` }); if (Math.abs(f.Fx) > 1e-12) t.push({ neg: -f.Fx < 0, s: `${fmt(Math.abs(f.Fx))}·${arm(f.y - yO)}` }); });
+    Cl.forEach(c => t.push({ neg: c < 0, s: fmt(Math.abs(c)) }));
+    return t.map(e => (e.neg ? ' − ' : ' + ') + e.s).join('');
+  };
+  const sFx = Fl.reduce((a, f) => a + f.Fx, 0), sFy = Fl.reduce((a, f) => a + f.Fy, 0);
+  const fxStr = sj(Fl.filter(f => Math.abs(f.Fx) > 1e-12).map(f => ({ neg: f.Fx < 0, s: fmt(Math.abs(f.Fx)) })));
+  const fyStr = sj(Fl.filter(f => Math.abs(f.Fy) > 1e-12).map(f => ({ neg: f.Fy < 0, s: fmt(Math.abs(f.Fy)) })));
+  const step = res.length ? 2 : 1, tA = SP.supports.A, tD = SP.supports.D;
+  if (g === 0) {
+    st += `<h3>Paso ${step} · Ecuaciones de equilibrio <span class="note">(fuerzas + → y ↑, momentos + antihorario)</span></h3>`;
+    if ((tA === 'fixed' && tD === 'free') || (tD === 'fixed' && tA === 'free')) {
+      const O = tA === 'fixed' ? 'A' : 'D', r = R[O];
+      st += `<div class="eq">ΣF<sub>x</sub> = 0: &nbsp; H<sub>${O}</sub> + (${fxStr}) = 0 &nbsp;⇒&nbsp; H<sub>${O}</sub> = <b>${fmt(r.Rx)} kN</b></div>
+        <div class="eq">ΣF<sub>y</sub> = 0: &nbsp; V<sub>${O}</sub> + (${fyStr}) = 0 &nbsp;⇒&nbsp; V<sub>${O}</sub> = <b>${fmt(r.Ry)} kN</b></div>
+        <div class="eq">ΣM<sub>${O}</sub> = 0: &nbsp; M<sub>${O}</sub>${tail(r.x, 0)} = 0 &nbsp;⇒&nbsp; M<sub>${O}</sub> = <b>${fmt(r.M)} kN·m</b></div>`;
+    } else {
+      const O = tA === 'pin' ? 'A' : 'D', Q = O === 'A' ? 'D' : 'A', ro = R[O], rq = R[Q];
+      st += `<div class="eq">ΣM<sub>${O}</sub> = 0: &nbsp; V<sub>${Q}</sub>·${arm(rq.x - ro.x)}${tail(ro.x, 0)} = 0 &nbsp;⇒&nbsp; V<sub>${Q}</sub> = <b>${fmt(rq.Ry)} kN</b></div>
+        <div class="eq">ΣF<sub>y</sub> = 0: &nbsp; V<sub>${O}</sub> + V<sub>${Q}</sub> + (${fyStr}) = 0 &nbsp;⇒&nbsp; V<sub>${O}</sub> = <b>${fmt(ro.Ry)} kN</b></div>
+        <div class="eq">ΣF<sub>x</sub> = 0: &nbsp; H<sub>${O}</sub> + (${fxStr}) = 0 &nbsp;⇒&nbsp; H<sub>${O}</sub> = <b>${fmt(ro.Rx)} kN</b></div>`;
+    }
+  } else {
+    st += `<h3>Paso ${step} · Resolución</h3><p class="note">Hay ${g} incógnita(s) más que ecuaciones de equilibrio. Se ha resuelto con el método de rigidez (EI igual en todas las barras y barras prácticamente indeformables axialmente). A mano: método de las fuerzas, quitando ${g} reacción(es) redundante(s) e imponiendo compatibilidad.</p>`;
+  }
+  let cx = sFx + R.A.Rx + R.D.Rx, cy = sFy + R.A.Ry + R.D.Ry, cm = R.A.M + R.D.M + R.D.Ry * SP.L + Cl.reduce((a, c) => a + c, 0);
+  Fl.forEach(f => cm += f.x * f.Fy - f.y * f.Fx);
+  st += `<div class="eq">Comprobación: &nbsp; ΣF<sub>x</sub> = ${fmt(cx, 4)} · ΣF<sub>y</sub> = ${fmt(cy, 4)} · ΣM<sub>A</sub> = ${fmt(cm, 4)} &nbsp; ${Math.abs(cx) + Math.abs(cy) + Math.abs(cm) < 1e-4 ? '<span class="ok">✔ equilibrio</span>' : '⚠'}</div>`;
+  $('solSteps').innerHTML = st;
+  const rc = (v, pos, neg) => Math.abs(v) < 1e-9 ? '0' : `<b>${fmt(Math.abs(v))}</b> ${v > 0 ? pos : neg}`;
+  $('solReac').innerHTML = `<table><tr><th>Apoyo</th><th>Tipo</th><th>Horizontal H</th><th>Vertical V</th><th>Momento M</th></tr>` +
+    ['A', 'D'].map(k => { const r = R[k], t = SP.supports[k], dd = SUP_DOF[t]; return `<tr><td><b>${k}</b></td><td>${FTYPES[t]}</td><td>${dd.includes(0) ? rc(r.Rx, 'kN →', 'kN ←') : '—'}</td><td>${dd.includes(1) ? rc(r.Ry, 'kN ↑', 'kN ↓') : '—'}</td><td>${dd.includes(2) ? rc(r.M, 'kN·m ↺', 'kN·m ↻') : '—'}</td></tr>`; }).join('') + `</table>`;
+  $('solN').innerHTML = frameDiagram(SP, laws, 'N');
+  $('solV').innerHTML = frameDiagram(SP, laws, 'V');
+  $('solM').innerHTML = frameDiagram(SP, laws, 'M');
+  // máximos por barra
+  let ex = `<table class="extr"><tr><th>Barra</th><th>N máx</th><th>N mín</th><th>V máx</th><th>V mín</th><th>M máx</th><th>M mín</th></tr>`;
+  for (const m of FM) {
+    const c = { N: [], V: [], M: [] };
+    laws[m].forEach(s => { ['N', 'V', 'M'].forEach(w => c[w].push({ t: s.x1, v: pev(s[w], s.x1) }, { t: s.x2, v: pev(s[w], s.x2) })); rootsIn(s.V, s.x1, s.x2).forEach(t => c.M.push({ t, v: pev(s.M, t) })); });
+    const mx = a => a.reduce((p, q) => q.v > p.v ? q : p), mn = a => a.reduce((p, q) => q.v < p.v ? q : p);
+    const cell = e => `${fmt(e.v)} <span class="note">(s=${fmt(e.t)})</span>`;
+    ex += `<tr><td>${MLBL[m]}</td>${['N', 'V', 'M'].map(w => `<td>${cell(mx(c[w]))}</td><td>${cell(mn(c[w]))}</td>`).join('')}</tr>`;
+  }
+  $('solExt').innerHTML = ex + `</table>`;
+  let lw = '';
+  for (const m of FM) {
+    lw += `<h4 style="margin:12px 0 4px">${MLONG[m]} <span class="note">(${MCOORD[m]})</span></h4><table><tr><th>Tramo</th><th>Intervalo (m)</th><th>N(s) (kN)</th><th>V(s) (kN)</th><th>M(s) (kN·m)</th></tr>` +
+      laws[m].map((s, k) => `<tr><td>${k + 1}</td><td>${fmt(s.x1)} &lt; s &lt; ${fmt(s.x2)}</td><td>N = ${fmtPoly(s.N).replace(/x/g, 's')}</td><td>V = ${fmtPoly(s.V).replace(/x/g, 's')}</td><td>M = ${fmtPoly(s.M).replace(/x/g, 's')}</td></tr>`).join('') + `</table>`;
+  }
+  $('solLaws').innerHTML = lw;
+}
+function frameDatosHTML() {
+  const pos = m => m === 'b' ? 'x' : 'y';
+  let h = `<p><b>Luz:</b> L = ${fmt(SP.L)} m · <b>Altura:</b> H = ${fmt(SP.H)} m · <b>Apoyo A:</b> ${FTYPES[SP.supports.A]} · <b>Apoyo D:</b> ${FTYPES[SP.supports.D]}</p>`;
+  if (SP.points.length) h += `<table><tr><th>Carga</th><th>Barra</th><th>Posición (m)</th><th>P (kN)</th><th>Sentido</th></tr>` + SP.points.map((p, i) => `<tr><td><b>P${i + 1}</b></td><td>${MLBL[p.m]}</td><td>${pos(p.m)} = ${fmt(p.s)}</td><td>${fmt(p.P)}</td><td>${p.m === 'b' ? (p.P >= 0 ? '↑' : '↓') : (p.P >= 0 ? '→' : '←')}</td></tr>`).join('') + `</table>`;
+  if (SP.moments.length) h += `<table><tr><th>Momento</th><th>Barra</th><th>Posición (m)</th><th>M (kN·m)</th><th>Sentido</th></tr>` + SP.moments.map((p, i) => `<tr><td><b>M${i + 1}</b></td><td>${MLBL[p.m]}</td><td>${pos(p.m)} = ${fmt(p.s)}</td><td>${fmt(p.C)}</td><td>${p.C >= 0 ? '↺ antihorario' : '↻ horario'}</td></tr>`).join('') + `</table>`;
+  if (SP.dists.length) h += `<table><tr><th>Distribuida</th><th>Barra</th><th>Tipo</th><th>Desde (m)</th><th>Hasta (m)</th><th>q inicio</th><th>q fin</th></tr>` + SP.dists.map((d, i) => `<tr><td><b>q${i + 1}</b></td><td>${MLBL[d.m]}</td><td>${QTYPES[d.type]}</td><td>${fmt(d.a)}</td><td>${fmt(d.b)}</td><td>${fmt(d.q1)}</td><td>${fmt(d.q2)}</td></tr>`).join('') + `</table>`;
+  return h + `<p class="note">Signos: en el dintel + hacia arriba; en los pilares + hacia la derecha; momentos + antihorario. Posiciones: x desde B en el dintel, y desde la base en los pilares.</p>`;
+}
+
+let MODE = 'beam';
+function setMode(m) {
+  MODE = m;
+  try { localStorage.setItem('vigasMode', m); } catch (e) {}
+  document.querySelectorAll('.mode button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  $('cfgBeam').hidden = m === 'frame'; $('cfgFrame').hidden = m !== 'frame';
+  $('cfgMode').textContent = m === 'frame' ? '· pórtico' : '· viga';
+  document.querySelector('#tEnun h2').textContent = m === 'frame' ? '2. Enunciado · pórtico' : '2. Enunciado · viga';
+  const tb = 'Problema de vigas: cortantes y flectores', tp = 'Problema de pórticos: normales, cortantes y flectores';
+  if ([tb, tp].includes($('rTitle').value)) $('rTitle').value = m === 'frame' ? tp : tb;
+  if (m === 'frame' && !SP) { generateFrame(); return; }
+  showSol = false; renderTables(); update();
+}
+function buildFQ(n, box, cls) { const b = $(box), prev = [...b.querySelectorAll('select')].map(x => x.value); b.innerHTML = ''; for (let i = 0; i < +$(n).value; i++) { b.insertAdjacentHTML('beforeend', `<div class="row"><span>q${i + 1}</span><select class="${cls}"><option value="random">Aleatorio</option>${Object.entries(QTYPES).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></div>`); b.lastElementChild.querySelector('select').value = prev[i] || 'uniform'; } }
+['fSupA', 'fSupD'].forEach((id, i) => { $(id).innerHTML = `<option value="random">Aleatorio</option>` + Object.entries(FTYPES).map(([k, t]) => `<option value="${k}">${t}</option>`).join(''); $(id).value = i ? 'roller' : 'pin'; });
+fillSel($('fnPb'), 0, 4, 1); fillSel($('fnPc'), 0, 3, 1); fillSel($('fnM'), 0, 2, 0); fillSel($('fnQb'), 0, 2, 1); fillSel($('fnQc'), 0, 2, 0);
+buildFQ('fnQb', 'fqbTypes', 'fqbType'); buildFQ('fnQc', 'fqcTypes', 'fqcType');
+$('fnQb').onchange = () => buildFQ('fnQb', 'fqbTypes', 'fqbType'); $('fnQc').onchange = () => buildFQ('fnQc', 'fqcTypes', 'fqcType');
+document.querySelectorAll('.mode button').forEach(b => b.onclick = () => setMode(b.dataset.mode));
 
 // ---------------- Inicio ----------------
 fillSel($('nSup'), 1, 4, 2); fillSel($('nP'), 0, 5, 2); fillSel($('nM'), 0, 3, 1); fillSel($('nQ'), 0, 3, 1);
@@ -804,13 +1308,13 @@ function datosHTML() {
 function reportDoc(withToolbar) {
   const o = id => $(id).checked;
   renderSolution();
-  const sol = solve(S), ok = !sol.error;
+  const sol = MODE === 'frame' ? solveFrame(SP) : solve(S), ok = !sol.error;
   const title = $('rTitle').value.trim() || 'Informe de viga';
   const date = $('rDate').value ? new Date($('rDate').value + 'T12:00').toLocaleDateString('es-ES') : '';
   let b = `<div class="rh"><h1>${esc(title)}</h1><div class="meta">${$('rName').value.trim() ? `<span><b>Alumno/a:</b> ${esc($('rName').value)}</span>` : ''}${date ? `<span><b>Fecha:</b> ${date}</span>` : ''}</div></div>`;
-  if (o('rEnun') || o('rDatos')) b += `<h2>Enunciado</h2><p class="note" style="margin:0 0 6px">Calcular las reacciones y dibujar los diagramas de esfuerzos cortantes y momentos flectores de la viga.</p>`;
-  if (o('rEnun')) b += drawBeam(S, null);
-  if (o('rDatos')) b += datosHTML();
+  if (o('rEnun') || o('rDatos')) b += `<h2>Enunciado</h2><p class="note" style="margin:0 0 6px">${MODE === 'frame' ? 'Calcular las reacciones y dibujar los diagramas de esfuerzos normales, cortantes y momentos flectores del pórtico.' : 'Calcular las reacciones y dibujar los diagramas de esfuerzos cortantes y momentos flectores de la viga.'}</p>`;
+  if (o('rEnun')) b += MODE === 'frame' ? drawFrame(SP, null) : drawBeam(S, null);
+  if (o('rDatos')) b += MODE === 'frame' ? frameDatosHTML() : datosHTML();
   if (o('rCrit')) b += `<h3>Criterio de signos</h3><ul>${$('critList').innerHTML}</ul>`;
   if ($('rNotes').value.trim()) b += `<h3>Observaciones</h3><div class="notes">${esc($('rNotes').value)}</div>`;
   if (o('rSpace')) b += `<div class="space">Resolución:</div>`;
@@ -820,7 +1324,8 @@ function reportDoc(withToolbar) {
     add('rFbd', 'Diagrama de sólido libre', $('solFbd').innerHTML);
     add('rSteps', 'Planteamiento y ecuaciones de equilibrio', $('solSteps').innerHTML);
     add('rReac', 'Reacciones', $('solReac').innerHTML);
-    if (validDists(S).length) add('rQ', 'Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia arriba)</span>', $('solQ').innerHTML);
+    if (MODE === 'frame') add('rN', 'Diagrama de esfuerzos normales N', $('solN').innerHTML);
+    if (MODE !== 'frame' && validDists(S).length) add('rQ', 'Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia arriba)</span>', $('solQ').innerHTML);
     add('rV', 'Diagrama de esfuerzos cortantes V(x)', $('solV').innerHTML);
     add('rM', 'Diagrama de momentos flectores M(x)', $('solM').innerHTML);
     add('rExt', 'Valores máximos', $('solExt').innerHTML);
@@ -837,9 +1342,9 @@ function refreshPreview() {
   f.srcdoc = reportDoc(false);
 }
 const PRESETS = {
-  ej: { rEnun: 1, rDatos: 1, rCrit: 1, rFbd: 0, rSteps: 0, rReac: 0, rQ: 0, rV: 0, rM: 0, rExt: 0, rLaws: 0, rNewPage: 0, rSpace: 1 },
-  diag: { rEnun: 1, rDatos: 0, rCrit: 0, rFbd: 1, rSteps: 0, rReac: 1, rQ: 1, rV: 1, rM: 1, rExt: 0, rLaws: 0, rNewPage: 0, rSpace: 0 },
-  all: { rEnun: 1, rDatos: 1, rCrit: 1, rFbd: 1, rSteps: 1, rReac: 1, rQ: 1, rV: 1, rM: 1, rExt: 1, rLaws: 1, rNewPage: 1, rSpace: 0 }
+  ej: { rEnun: 1, rDatos: 1, rCrit: 1, rFbd: 0, rSteps: 0, rReac: 0, rQ: 0, rN: 0, rV: 0, rM: 0, rExt: 0, rLaws: 0, rNewPage: 0, rSpace: 1 },
+  diag: { rEnun: 1, rDatos: 0, rCrit: 0, rFbd: 1, rSteps: 0, rReac: 1, rQ: 1, rN: 1, rV: 1, rM: 1, rExt: 0, rLaws: 0, rNewPage: 0, rSpace: 0 },
+  all: { rEnun: 1, rDatos: 1, rCrit: 1, rFbd: 1, rSteps: 1, rReac: 1, rQ: 1, rN: 1, rV: 1, rM: 1, rExt: 1, rLaws: 1, rNewPage: 1, rSpace: 0 }
 };
 document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => { Object.entries(PRESETS[b.dataset.preset]).forEach(([k, v]) => $(k).checked = !!v); refreshPreview(); });
 $('tRep').addEventListener('change', refreshPreview);
@@ -853,11 +1358,12 @@ $('rOpen').onclick = () => {
   if (!w) { alert('El navegador ha bloqueado la ventana. Permite las ventanas emergentes para esta página.'); return; }
   w.document.open(); w.document.write(reportDoc(true)); w.document.close();
 };
-$('gen').onclick = () => { generate(); showTab('tEnun'); };
+$('gen').onclick = () => { MODE === 'frame' ? generateFrame() : generate(); showTab('tEnun'); };
 $('toggleSol').onclick = () => { showSol = !showSol; update(); };
 $('mDown').onchange = update;
 $('printBtn').onclick = () => window.print();
 generate();
+{ let m0 = 'beam'; try { m0 = localStorage.getItem('vigasMode') || 'beam'; } catch (e) {} setMode(m0); }
 
 let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; $('installBtn').hidden = false; });
