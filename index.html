@@ -57,6 +57,9 @@
   details.sec>summary:hover h3{text-decoration:underline}
   #solSteps>h3:first-child{margin-top:4px}
   .secbtns{margin:6px 0 4px}
+  input[type=text],input[type=date],textarea{padding:6px 8px;border:1px solid #c5ced8;border-radius:6px;font:inherit;font-size:.92rem}
+  textarea{width:100%;resize:vertical}
+  .repopts label:not(:first-child){font-weight:400;font-size:.92rem}
   .tables>div{min-width:0;overflow-x:auto}
   .tables input[type=number]{width:68px}
   #solLaws,#solReac,#solExt{overflow-x:auto}
@@ -74,7 +77,7 @@
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<svg id="defsSvg" width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <marker id="ah-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#c62828"/></marker>
     <marker id="ah-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" fill="#1565c0"/></marker>
@@ -86,7 +89,7 @@
 <header>
   <img src="icons/icon-192.png" alt="">
   <h1>Vigas · Diagramas de esfuerzos cortantes y momentos flectores</h1>
-  <span id="ver" style="font-size:.85rem;opacity:.85">v2.3 · 14-11-2026</span>
+  <span id="ver" style="font-size:.85rem;opacity:.85">v2.4 · 14-11-2026</span>
   <button id="installBtn" hidden>⬇ Instalar app</button>
   <button id="printBtn" class="noprint">🖨 Imprimir</button>
 </header>
@@ -96,6 +99,7 @@
   <button data-tab="tConfig" title="Configuración"><svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2.2" fill="#fff"/><circle cx="15" cy="12" r="2.2" fill="#fff"/><circle cx="7" cy="18" r="2.2" fill="#fff"/></svg><span class="lbl"><span class="num">1</span>Configuración</span></button>
   <button data-tab="tEnun" title="Enunciado"><svg viewBox="0 0 24 24"><rect x="2" y="13" width="20" height="3" rx=".5"/><path d="M5 16l-2.5 4h5z"/><path d="M19 16l-2.5 4h5z"/><line x1="12" y1="3" x2="12" y2="11"/><path d="M9.5 8.5L12 11l2.5-2.5"/></svg><span class="lbl"><span class="num">2</span>Enunciado</span></button>
   <button data-tab="tSol" title="Solución"><svg viewBox="0 0 24 24"><line x1="2" y1="12" x2="22" y2="12"/><path d="M3 12C6 3 18 3 21 12"/><path d="M3 12v5h9v-5"/><path d="M12 12v-3h9v3" opacity=".6"/></svg><span class="lbl"><span class="num">3</span>Solución</span></button>
+  <button data-tab="tRep" title="Informe PDF"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg><span class="lbl"><span class="num">4</span>Informe PDF</span></button>
 </nav>
 <main>
   <section class="card tab" id="tConfig"><div id="config">
@@ -142,7 +146,7 @@
   </section>
 <section class="card note">
     <h2>Criterio de signos</h2>
-    <ul>
+    <ul id="critList">
       <li><b>x</b> se mide desde el extremo izquierdo de la viga. Unidades: kN y m.</li>
       <li><b>Cargas puntuales P</b> y <b>distribuidas q</b>: positivas hacia abajo.</li>
       <li><b>Momentos aplicados</b>: positivos en sentido horario (↻), negativos antihorario (↺).</li>
@@ -180,6 +184,49 @@
   </section>
 
 
+  <section class="card tab" id="tRep">
+    <h2>4. Informe PDF</h2>
+    <div class="grid">
+      <div class="fld"><label>Título</label><input type="text" id="rTitle" value="Problema de vigas: cortantes y flectores"></div>
+      <div class="fld"><label>Alumno/a</label><input type="text" id="rName" placeholder="Nombre"></div>
+      <div class="fld"><label>Fecha</label><input type="date" id="rDate"></div>
+    </div>
+    <div class="fld" style="margin-top:10px"><label>Observaciones</label><textarea id="rNotes" rows="2" placeholder="Opcional"></textarea></div>
+    <div class="actions" style="margin-top:12px">
+      <span class="note"><b>Plantillas:</b></span>
+      <button class="mini sec" data-preset="ej">📝 Hoja de ejercicio (sin solución)</button>
+      <button class="mini sec" data-preset="diag">📐 Viga y diagramas</button>
+      <button class="mini sec" data-preset="all">📚 Completo</button>
+    </div>
+    <div class="grid repopts" style="margin-top:10px">
+      <div class="fld"><label>Enunciado</label>
+        <label><input type="checkbox" id="rEnun" checked> Figura de la viga</label>
+        <label><input type="checkbox" id="rDatos" checked> Tabla de datos</label>
+        <label><input type="checkbox" id="rCrit"> Criterio de signos</label>
+      </div>
+      <div class="fld"><label>Solución</label>
+        <label><input type="checkbox" id="rFbd" checked> Diagrama de sólido libre</label>
+        <label><input type="checkbox" id="rSteps" checked> Planteamiento y ecuaciones</label>
+        <label><input type="checkbox" id="rReac" checked> Reacciones</label>
+        <label><input type="checkbox" id="rExt" checked> Valores máximos</label>
+        <label><input type="checkbox" id="rLaws" checked> Leyes por tramos</label>
+      </div>
+      <div class="fld"><label>Diagramas</label>
+        <label><input type="checkbox" id="rQ" checked> Cargas q(x)</label>
+        <label><input type="checkbox" id="rV" checked> Cortantes V(x)</label>
+        <label><input type="checkbox" id="rM" checked> Flectores M(x)</label>
+        <label style="margin-top:6px"><input type="checkbox" id="rNewPage" checked> Empezar la solución en página nueva</label>
+        <label><input type="checkbox" id="rSpace"> Dejar espacio para resolver (hoja de ejercicio)</label>
+      </div>
+    </div>
+    <div class="actions">
+      <button id="rPdf">💾 Guardar PDF / Imprimir</button>
+      <button id="rOpen" class="sec">↗ Abrir informe en ventana nueva</button>
+      <span class="note">En el diálogo de impresión elige el destino <b>«Guardar como PDF»</b>.</span>
+    </div>
+    <h3>Vista previa</h3>
+    <iframe id="repPrev" title="Vista previa del informe" style="width:100%;min-height:400px;border:1px solid #cfd8dc;border-radius:8px;background:#fff"></iframe>
+  </section>
 </main>
 </div>
 
@@ -680,6 +727,7 @@ function update() {
   $('solution').hidden = !showSol;
   $('toggleSol').textContent = showSol ? '🙈 Ocultar solución' : '👁 Mostrar solución';
   if (showSol) renderSolution();
+  if (typeof refreshPreview === 'function') refreshPreview();
 }
 
 // ---------------- Inicio ----------------
@@ -690,6 +738,7 @@ function showTab(id) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === id));
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === id));
   try { localStorage.setItem('vigasTab', id); } catch (e) {}
+  if (id === 'tRep') refreshPreview();
   window.scrollTo(0, 0);
 }
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -699,6 +748,97 @@ document.querySelectorAll('.secbtns button').forEach(b => b.onclick = () => {
   const v = b.dataset.view;
   document.querySelectorAll('details.sec').forEach(d => d.open = v === 'all' || (v === 'diag' && d.dataset.g === 'diag'));
 });
+// ---------------- Informe ----------------
+const REPORT_CSS = `
+  @page{size:A4;margin:14mm}
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#1d2733;margin:0;background:#e9edf2}
+  .paper{max-width:190mm;margin:0 auto;background:#fff;padding:12mm 12mm 16mm}
+  .toolbar{position:sticky;top:0;background:#1f4e79;color:#fff;padding:10px 16px;display:flex;gap:12px;align-items:center;z-index:5}
+  .toolbar button{background:#fff;color:#1f4e79;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;font-size:.95rem}
+  .rh{border-bottom:3px solid #1f4e79;padding-bottom:8px;margin-bottom:10px}
+  .rh h1{font-size:1.35rem;margin:0 0 4px;color:#1f4e79}
+  .rh .meta{display:flex;gap:24px;font-size:.92rem;color:#455a64;flex-wrap:wrap}
+  h2{font-size:1.08rem;color:#1f4e79;border-bottom:1px solid #cfd8dc;padding-bottom:3px;margin:16px 0 8px;break-after:avoid}
+  h3{font-size:.98rem;color:#1f4e79;margin:10px 0 6px;break-after:avoid}
+  svg{width:100%;height:auto;display:block;break-inside:avoid}
+  table{border-collapse:collapse;width:100%;font-size:.85rem;margin:4px 0 8px}
+  th,td{border-bottom:1px solid #e3e8ee;padding:4px 6px;text-align:left}
+  th{background:#f5f8fb;color:#5f6b7a}
+  tr{break-inside:avoid}
+  .eq{font-family:"Cambria Math","Times New Roman",serif;font-size:.98rem;background:#f7f9fc;border-left:3px solid #1f4e79;padding:6px 10px;margin:5px 0;border-radius:4px;break-inside:avoid}
+  .note{font-size:.84rem;color:#5f6b7a}
+  .ok{color:#2e7d32;font-weight:600}
+  .warn{background:#fff3e0;border-left:4px solid #ef6c00;padding:6px 10px}
+  .badge{display:inline-block;padding:2px 9px;border-radius:12px;font-weight:600;font-size:.85rem;background:#e3f2fd;color:#1f4e79}
+  .badge.h{background:#fce4ec;color:#ad1457}
+  .halo{paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
+  .space{height:150mm;border:1px dashed #b0bec5;border-radius:6px;margin-top:8px;color:#90a4ae;font-size:.85rem;padding:6px}
+  .newpage{break-before:page}
+  ul{font-size:.88rem;color:#37474f;padding-left:18px}
+  .notes{white-space:pre-wrap;font-size:.92rem}
+  @media print{body{background:#fff}.toolbar{display:none}.paper{padding:0;max-width:none}}`;
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+function datosHTML() {
+  let h = `<p><b>Longitud de la viga:</b> L = ${fmt(S.L)} m</p>`;
+  h += `<table><tr><th>Apoyo</th><th>Tipo</th><th>x (m)</th></tr>` + S.supports.map((s, i) => `<tr><td><b>${LET[i]}</b></td><td>${TYPES[s.type]}</td><td>${fmt(s.x)}</td></tr>`).join('') + `</table>`;
+  if (S.points.length) h += `<table><tr><th>Carga puntual</th><th>x (m)</th><th>P (kN)</th><th>Sentido</th></tr>` + S.points.map((p, i) => `<tr><td><b>P${i + 1}</b></td><td>${fmt(p.x)}</td><td>${fmt(Math.abs(p.P))}</td><td>${p.P >= 0 ? '↓ hacia abajo' : '↑ hacia arriba'}</td></tr>`).join('') + `</table>`;
+  if (S.moments.length) h += `<table><tr><th>Momento</th><th>x (m)</th><th>M (kN·m)</th><th>Sentido</th></tr>` + S.moments.map((m, i) => `<tr><td><b>M${i + 1}</b></td><td>${fmt(m.x)}</td><td>${fmt(Math.abs(m.C))}</td><td>${m.C >= 0 ? '↻ horario' : '↺ antihorario'}</td></tr>`).join('') + `</table>`;
+  if (S.dists.length) h += `<table><tr><th>Distribuida</th><th>Tipo</th><th>Desde (m)</th><th>Hasta (m)</th><th>q inicio (kN/m)</th><th>q fin (kN/m)</th></tr>` + S.dists.map((d, i) => `<tr><td><b>q${i + 1}</b></td><td>${QTYPES[d.type]}</td><td>${fmt(d.a)}</td><td>${fmt(d.b)}</td><td>${fmt(d.q1)}</td><td>${fmt(d.q2)}</td></tr>`).join('') + `</table>`;
+  return h;
+}
+function reportDoc(withToolbar) {
+  const o = id => $(id).checked;
+  renderSolution();
+  const sol = solve(S), ok = !sol.error;
+  const title = $('rTitle').value.trim() || 'Informe de viga';
+  const date = $('rDate').value ? new Date($('rDate').value + 'T12:00').toLocaleDateString('es-ES') : '';
+  let b = `<div class="rh"><h1>${esc(title)}</h1><div class="meta">${$('rName').value.trim() ? `<span><b>Alumno/a:</b> ${esc($('rName').value)}</span>` : ''}${date ? `<span><b>Fecha:</b> ${date}</span>` : ''}</div></div>`;
+  if (o('rEnun') || o('rDatos')) b += `<h2>Enunciado</h2><p class="note" style="margin:0 0 6px">Calcular las reacciones y dibujar los diagramas de esfuerzos cortantes y momentos flectores de la viga.</p>`;
+  if (o('rEnun')) b += drawBeam(S, null);
+  if (o('rDatos')) b += datosHTML();
+  if (o('rCrit')) b += `<h3>Criterio de signos</h3><ul>${$('critList').innerHTML}</ul>`;
+  if ($('rNotes').value.trim()) b += `<h3>Observaciones</h3><div class="notes">${esc($('rNotes').value)}</div>`;
+  if (o('rSpace')) b += `<div class="space">Resolución:</div>`;
+  const parts = [];
+  const add = (id, t, html) => { if (o(id)) parts.push(`<h3>${t}</h3>${html}`); };
+  if (ok) {
+    add('rFbd', 'Diagrama de sólido libre', $('solFbd').innerHTML);
+    add('rSteps', 'Planteamiento y ecuaciones de equilibrio', $('solSteps').innerHTML);
+    add('rReac', 'Reacciones', $('solReac').innerHTML);
+    if (validDists(S).length) add('rQ', 'Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia abajo)</span>', $('solQ').innerHTML);
+    add('rV', 'Diagrama de esfuerzos cortantes V(x)', $('solV').innerHTML);
+    add('rM', 'Diagrama de momentos flectores M(x)', $('solM').innerHTML);
+    add('rExt', 'Valores máximos', $('solExt').innerHTML);
+    add('rLaws', 'Leyes de esfuerzos por tramos', $('solLaws').innerHTML);
+  }
+  if (parts.length || !ok) b += `<h2 class="${o('rNewPage') && (o('rEnun') || o('rDatos')) ? 'newpage' : ''}">Solución</h2>${$('solHead').innerHTML}` + parts.join('');
+  const tb = withToolbar ? `<div class="toolbar"><button onclick="window.print()">💾 Guardar PDF / Imprimir</button><span style="font-size:.9rem">En el diálogo elige «Guardar como PDF».</span></div>` : '';
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>${esc(title)}</title><style>${REPORT_CSS}</style></head><body>${tb}${$('defsSvg').outerHTML}<div class="paper">${b}</div></body></html>`;
+}
+function refreshPreview() {
+  if (!S || !$('tRep').classList.contains('active')) return;
+  const f = $('repPrev');
+  f.onload = () => { try { f.style.height = (f.contentDocument.documentElement.scrollHeight + 20) + 'px'; } catch (e) {} };
+  f.srcdoc = reportDoc(false);
+}
+const PRESETS = {
+  ej: { rEnun: 1, rDatos: 1, rCrit: 1, rFbd: 0, rSteps: 0, rReac: 0, rQ: 0, rV: 0, rM: 0, rExt: 0, rLaws: 0, rNewPage: 0, rSpace: 1 },
+  diag: { rEnun: 1, rDatos: 0, rCrit: 0, rFbd: 1, rSteps: 0, rReac: 1, rQ: 1, rV: 1, rM: 1, rExt: 0, rLaws: 0, rNewPage: 0, rSpace: 0 },
+  all: { rEnun: 1, rDatos: 1, rCrit: 1, rFbd: 1, rSteps: 1, rReac: 1, rQ: 1, rV: 1, rM: 1, rExt: 1, rLaws: 1, rNewPage: 1, rSpace: 0 }
+};
+document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => { Object.entries(PRESETS[b.dataset.preset]).forEach(([k, v]) => $(k).checked = !!v); refreshPreview(); });
+$('tRep').addEventListener('change', refreshPreview);
+$('rDate').value = new Date().toISOString().slice(0, 10);
+$('rPdf').onclick = () => {
+  const f = $('repPrev'); f.srcdoc = reportDoc(false);
+  f.onload = () => { const old = document.title; document.title = $('rTitle').value || 'Informe'; f.contentWindow.focus(); f.contentWindow.print(); setTimeout(() => document.title = old, 1500); f.onload = () => { try { f.style.height = (f.contentDocument.documentElement.scrollHeight + 20) + 'px'; } catch (e) {} }; f.onload(); };
+};
+$('rOpen').onclick = () => {
+  const w = window.open('', '_blank');
+  if (!w) { alert('El navegador ha bloqueado la ventana. Permite las ventanas emergentes para esta página.'); return; }
+  w.document.open(); w.document.write(reportDoc(true)); w.document.close();
+};
 $('gen').onclick = () => { generate(); showTab('tEnun'); };
 $('toggleSol').onclick = () => { showSol = !showSol; update(); };
 $('mDown').onchange = update;
