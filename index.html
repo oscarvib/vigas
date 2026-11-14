@@ -90,7 +90,7 @@
 <header>
   <img src="icons/icon-192.png" alt="">
   <h1>Vigas · Diagramas de esfuerzos cortantes y momentos flectores</h1>
-  <span id="ver" style="font-size:.85rem;opacity:.85">v2.7 · 14-11-2026</span>
+  <span id="ver" style="font-size:.85rem;opacity:.85">v2.8 · 14-11-2026</span>
   <button id="installBtn" hidden>⬇ Instalar app</button>
   <button id="printBtn" class="noprint">🖨 Imprimir</button>
 </header>
@@ -663,8 +663,7 @@ function renderSolution() {
   let st = '';
   if (dists.length) {
     st += `<h3>Paso 1 · Resultantes de las cargas distribuidas</h3><table><tr><th></th><th>Tipo</th><th>Resultante Q (kN)</th><th>Sentido</th><th>Posición x̄ (m)</th></tr>` +
-      dists.map(d => `<tr><td><b>Q${d.i + 1}</b></td><td>${QTYPES[d.type] || ''}</td><td>${fmt(Math.abs(d.W))}</td><td>${d.W > 1e-9 ? '↓ hacia abajo' : (d.W < -1e-9 ? '↑ hacia arriba' : '—')}</td><td>${Math.abs(d.W) > 1e-9 ? fmt(d.xc) : '—'}</td></tr>`).join('') + `</table>
-      <div class="note">Uniforme: Q = q·a, en el centro. Triangular: Q = q·a/2, a 1/3 del lado mayor. Trapezoidal: suma de rectángulo + triángulo. Con el criterio de signos, una q negativa actúa hacia abajo y una positiva hacia arriba.</div>`;
+      dists.map(d => `<tr><td><b>Q${d.i + 1}</b></td><td>${QTYPES[d.type] || ''}</td><td>${fmt(Math.abs(d.W))}</td><td>${d.W > 1e-9 ? '↓ hacia abajo' : (d.W < -1e-9 ? '↑ hacia arriba' : '—')}</td><td>${Math.abs(d.W) > 1e-9 ? fmt(d.xc) : '—'}</td></tr>`).join('') + `</table>`;
   }
   // Criterio: fuerzas + hacia arriba, momentos + antihorario
   const Fl = [...S.points.map((p, i) => ({ F: -p.P, x: p.x })), ...dists.map(d => ({ F: -d.W, x: d.xc }))];
@@ -677,7 +676,7 @@ function renderSolution() {
   const sumFstr = sgnJoin(Fl.map(f => ({ neg: f.F < 0, s: fmt(Math.abs(f.F)) })));
   const rs = sol.reactions;
   const step = dists.length ? 2 : 1;
-  const crit = `<div class="note">Criterio: fuerzas positivas hacia arriba y momentos positivos en sentido antihorario. Brazos medidos desde el apoyo (negativo si la carga está a su izquierda).</div>`;
+  const crit = '';
   if (g === 0 && rs.length === 1 && rs[0].type === 'fixed') {
     const A = LET[0], r = rs[0];
     st += `<h3>Paso ${step} · Ecuaciones de equilibrio</h3>
@@ -730,15 +729,11 @@ function renderSolution() {
     return t.length ? t.join('<br>') : '<span class="note">—</span>';
   };
   const nodesL = sol.nodes;
-  const pder = p => p.slice(1).map((c, i) => c * (i + 1));
-  const ks = segs.findIndex(sg => sg.Q.some(c => Math.abs(c) > 1e-9)), kx = ks >= 0 ? ks : 0, sx = segs[kx];
-  const ej = `<div class="eq">Ejemplo, tramo ${kx + 1}: &nbsp; dV/dx = d(${fmtPoly(sx.V)})/dx = ${fmtPoly(pder(sx.V).length ? pder(sx.V) : [0])} = q &nbsp;&nbsp;·&nbsp;&nbsp; dM/dx = d(${fmtPoly(sx.M)})/dx = ${fmtPoly(pder(sx.M).length ? pder(sx.M) : [0])} = V</div>`;
-  $('solLaws').innerHTML = `<div class="eq">q(x) &nbsp;—( V = ∫q dx )→&nbsp; V(x) &nbsp;—( M = ∫V dx )→&nbsp; M(x) &nbsp;&nbsp;⟺&nbsp;&nbsp; dV/dx = q, &nbsp; dM/dx = V</div>
-    <div class="eq">Cargas puntuales: una fuerza F produce un salto ΔV = F en el cortante; un momento aplicado M<sub>0</sub> (antihorario +) produce un salto ΔM = −M<sub>0</sub> en el flector: los antihorarios bajan el diagrama y los horarios lo suben.</div>
+  $('solLaws').innerHTML = `
     <table><tr><th>Tramo</th><th>Intervalo (m)</th><th>Cargas puntuales al inicio del tramo<br><span class="note">(saltos)</span></th><th>q(x) (kN/m)</th><th>V(x) (kN)<br><span class="note">dV/dx = q</span></th><th>M(x) (kN·m)<br><span class="note">dM/dx = V</span></th></tr>` +
     segs.map((s, k) => `<tr><td>${k + 1}</td><td>${fmt(s.x1)} &lt; x &lt; ${fmt(s.x2)}</td><td>x = ${fmt(s.x1)}:<br>${acts(s.x1)}</td><td>q = ${fmtPoly(s.Q)}</td><td>V = ${fmtPoly(s.V)}</td><td>M = ${fmtPoly(s.M)}</td></tr>`).join('') +
     `<tr><td>fin</td><td>x = ${fmt(S.L)}</td><td>x = ${fmt(S.L)}:<br>${acts(nodesL[nodesL.length - 1])}</td><td colspan="3" class="note">Tras la última carga V y M deben volver a 0 (equilibrio).</td></tr>` +
-    `</table>` + ej + `<div class="note">x medida desde el extremo izquierdo de la viga.</div>`;
+    `</table>`;
 }
 
 function update() {
