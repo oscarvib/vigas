@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Vigas y pórticos · Esfuerzos</title>
+<title>Vigas, pórticos y cerchas · Esfuerzos</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1f4e79">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
@@ -92,9 +92,9 @@
 
 <header>
   <img src="icons/icon-192.png" alt="">
-  <h1>Vigas y pórticos · Diagramas de esfuerzos</h1>
-  <div class="mode" role="group" aria-label="Tipo de estructura"><button data-mode="beam" title="Viga">▬ Viga</button><button data-mode="frame" title="Pórtico">⊓ Pórtico</button></div>
-  <span id="ver" style="font-size:.85rem;opacity:.85">v3.0 · 14-11-2026</span>
+  <h1>Vigas, pórticos y cerchas · Esfuerzos</h1>
+  <div class="mode" role="group" aria-label="Tipo de estructura"><button data-mode="beam" title="Viga">▬ Viga</button><button data-mode="frame" title="Pórtico">⊓ Pórtico</button><button data-mode="truss" title="Cercha">△ Cercha</button></div>
+  <span id="ver" style="font-size:.85rem;opacity:.85">v3.1 · 15-11-2026</span>
   <button id="installBtn" hidden>⬇ Instalar app</button>
   <button id="printBtn" class="noprint">🖨 Imprimir</button>
 </header>
@@ -154,6 +154,17 @@
       <div class="fld"><label>Sentidos</label><label class="note"><input type="checkbox" id="fUp"> permitir sentidos contrarios (↑ en el dintel, ← en pilares)</label></div>
     </div>
     </div>
+    <div id="cfgTruss" hidden>
+    <div class="grid">
+      <div class="fld"><label>Tipología</label><select id="tTipo"></select></div>
+      <div class="fld"><label>Nº de paneles</label><select id="tN"></select><span class="note">Pratt, Howe y a dos aguas: número par</span></div>
+      <div class="fld"><label>Luz L (m)</label><div class="row"><input type="number" id="tL" value="8" step="0.5" min="1"><label><input type="checkbox" id="tLr" checked> aleatoria</label></div></div>
+      <div class="fld"><label>Altura H (m)</label><div class="row"><input type="number" id="tH" value="2" step="0.5" min="0.5"><label><input type="checkbox" id="tHr" checked> aleatoria</label></div></div>
+      <div class="fld"><label>Apoyos (izquierdo – derecho)</label><select id="tSup"><option value="pin-roller">Fijo – móvil</option><option value="roller-pin">Móvil – fijo</option><option value="pin-pin">Fijo – fijo (hiperestática)</option><option value="random">Aleatorio</option></select></div>
+      <div class="fld"><label>Cargas verticales en nudos</label><select id="tnV"></select><label class="note"><input type="checkbox" id="tAll"> carga igual en todos los nudos superiores (cubierta)</label></div>
+      <div class="fld"><label>Cargas horizontales (viento)</label><select id="tnH"></select></div>
+    </div>
+    </div>
     <div class="actions">
       <button id="gen">🎲 Generar problema aleatorio</button>
       <span class="note">Las posiciones y valores se generan al azar. Después puedes editarlos en la tabla de datos.</span>
@@ -177,6 +188,7 @@
       <li><b>Cortante V(x)</b>: suma de las fuerzas verticales a la izquierda de la sección (positivas hacia arriba).</li>
       <li><b>Flector M(x)</b>: suma de momentos respecto a la sección de lo que está a su izquierda; positivo si tracciona la fibra inferior (la viga se “sonríe”). Se cumple dV/dx = q y dM/dx = V. Por este criterio de flectores, un momento aplicado antihorario hace <i>bajar</i> el diagrama de M y uno horario lo hace <i>subir</i>.</li>
       <li><b>Pórticos</b>: las barras se recorren A→B→C→D (pilar izquierdo hacia arriba, dintel hacia la derecha, pilar derecho hacia abajo) y los esfuerzos se calculan con lo que queda antes de la sección. <b>N</b> positivo a tracción. <b>V</b> positivo si esas fuerzas apuntan hacia el exterior del pórtico. <b>M</b> positivo si tracciona la fibra interior (línea discontinua) y se dibuja siempre del lado traccionado.</li>
+      <li><b>Cerchas</b>: barras articuladas en los nudos, solo con esfuerzo axil N (+ tracción, − compresión). Cargas en los nudos: F<sub>x</sub> + hacia la derecha, F<sub>y</sub> + hacia arriba. Isostática si b + r = 2n (b barras, r reacciones, n nudos).</li>
       <li>Las vigas hiperestáticas se resuelven con el método de rigidez (EI constante, que no influye en las reacciones). Solo se consideran cargas verticales: la reacción horizontal es nula.</li>
     </ul>
   </section>
@@ -200,11 +212,11 @@
         <details class="sec" open><summary><h3>Planteamiento y ecuaciones de equilibrio</h3></summary><div id="solSteps"></div></details>
         <details class="sec" open><summary><h3>Reacciones</h3></summary><div id="solReac"></div></details>
         <details class="sec" data-g="diag" id="solQwrap" open><summary><h3>Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia arriba)</span></h3></summary><div id="solQ"></div></details>
-        <details class="sec" data-g="diag" id="solNwrap" open hidden><summary><h3>Diagrama de esfuerzos normales N</h3></summary><div id="solN"></div></details>
-        <details class="sec" data-g="diag" open><summary><h3>Diagrama de esfuerzos cortantes V(x)</h3></summary><div id="solV"></div></details>
-        <details class="sec" data-g="diag" open><summary><h3>Diagrama de momentos flectores M(x)</h3></summary><div id="solM"></div></details>
+        <details class="sec" data-g="diag" id="solNwrap" open hidden><summary><h3 id="solNT">Diagrama de esfuerzos normales N</h3></summary><div id="solN"></div></details>
+        <details class="sec" data-g="diag" id="solVwrap" open><summary><h3>Diagrama de esfuerzos cortantes V(x)</h3></summary><div id="solV"></div></details>
+        <details class="sec" data-g="diag" id="solMwrap" open><summary><h3>Diagrama de momentos flectores M(x)</h3></summary><div id="solM"></div></details>
         <details class="sec" open><summary><h3>Valores máximos</h3></summary><div id="solExt"></div></details>
-        <details class="sec" open><summary><h3>Leyes de esfuerzos por tramos</h3></summary><div id="solLaws"></div></details>
+        <details class="sec" open><summary><h3 id="solLawsT">Leyes de esfuerzos por tramos</h3></summary><div id="solLaws"></div></details>
       </div>
     </div>
   </section>
@@ -238,7 +250,7 @@
         <label><input type="checkbox" id="rLaws" checked> Leyes por tramos</label>
       </div>
       <div class="fld"><label>Diagramas</label>
-        <label><input type="checkbox" id="rN" checked> Normales N (pórticos)</label>
+        <label><input type="checkbox" id="rN" checked> Normales N (pórticos y cerchas)</label>
         <label><input type="checkbox" id="rQ" checked> Cargas q(x) (vigas)</label>
         <label><input type="checkbox" id="rV" checked> Cortantes V(x)</label>
         <label><input type="checkbox" id="rM" checked> Flectores M(x)</label>
@@ -489,6 +501,89 @@ function frameLaws(SP, sol) {
   return out;
 }
 
+// ---------------- CERCHAS (núcleo de cálculo) ----------------
+// Barras articuladas, solo esfuerzo axil. N + tracción. Cargas en nudos: Fx + derecha, Fy + arriba.
+const TTYPES = { pratt: 'Pratt (cordones paralelos)', howe: 'Howe (cordones paralelos)', warren: 'Warren (cordones paralelos)', roofPratt: 'A dos aguas tipo Pratt', roofHowe: 'A dos aguas tipo Howe' };
+const TSUP = { pin: 'Apoyo fijo (articulado)', roller: 'Apoyo móvil (deslizante)' };
+function trussGeom(T) {
+  const n = T.n, L = T.L, H = T.H, dx = L / n, nodes = [], bars = [];
+  const add = (x, y, chord) => { nodes.push({ x, y, chord }); return nodes.length - 1; };
+  const bar = (i, j, kind) => bars.push({ i, j, kind });
+  const b = []; for (let k = 0; k <= n; k++) b.push(add(k * dx, 0, 'inf'));
+  if (T.type === 'warren') {
+    const t = []; for (let k = 0; k < n; k++) t.push(add((k + 0.5) * dx, H, 'sup'));
+    for (let k = 0; k < n; k++) bar(b[k], b[k + 1], 'cordón inferior');
+    for (let k = 0; k < n - 1; k++) bar(t[k], t[k + 1], 'cordón superior');
+    for (let k = 0; k < n; k++) { bar(b[k], t[k], 'diagonal'); bar(t[k], b[k + 1], 'diagonal'); }
+  } else if (T.type === 'pratt' || T.type === 'howe') {
+    const t = []; for (let k = 0; k <= n; k++) t.push(add(k * dx, H, 'sup'));
+    for (let k = 0; k < n; k++) { bar(b[k], b[k + 1], 'cordón inferior'); bar(t[k], t[k + 1], 'cordón superior'); }
+    for (let k = 0; k <= n; k++) bar(b[k], t[k], 'montante');
+    for (let k = 0; k < n; k++) {
+      const left = k < n / 2, pr = T.type === 'pratt';
+      if (left === pr) bar(t[k], b[k + 1], 'diagonal'); else bar(b[k], t[k + 1], 'diagonal');
+    }
+  } else {                                            // cubierta a dos aguas (n par)
+    const t = { 0: b[0], [n]: b[n] };
+    for (let k = 1; k < n; k++) t[k] = add(k * dx, H * (1 - Math.abs(k * dx - L / 2) / (L / 2)), 'sup');
+    for (let k = 0; k < n; k++) { bar(b[k], b[k + 1], 'cordón inferior'); bar(t[k], t[k + 1], 'par (cordón superior)'); }
+    for (let k = 1; k < n; k++) bar(b[k], t[k], 'montante');
+    const pr = T.type === 'roofPratt';
+    for (let k = 1; k < n - 1; k++) {
+      const left = k < n / 2;
+      if (left !== pr) bar(t[k], b[k + 1], 'diagonal'); else bar(b[k], t[k + 1], 'diagonal');
+    }
+  }
+  return { nodes, bars, left: b[0], right: b[n] };
+}
+const TSUP_DOF = { pin: [0, 1], roller: [1] };
+function solveTruss(T) {
+  const G = trussGeom(T), N = G.nodes.length, nd = 2 * N;
+  const K = [...Array(nd)].map(() => new Array(nd).fill(0)), F = new Array(nd).fill(0);
+  G.bars.forEach(bb => {
+    const a = G.nodes[bb.i], c = G.nodes[bb.j], l = Math.hypot(c.x - a.x, c.y - a.y), cx = (c.x - a.x) / l, cy = (c.y - a.y) / l;
+    Object.assign(bb, { l, cx, cy });
+    const k = [[cx * cx, cx * cy], [cx * cy, cy * cy]], d = [2 * bb.i, 2 * bb.i + 1, 2 * bb.j, 2 * bb.j + 1];
+    for (let p = 0; p < 4; p++) for (let q = 0; q < 4; q++) K[d[p]][d[q]] += (p < 2 === q < 2 ? 1 : -1) * k[p % 2][q % 2] / l;
+  });
+  T.loads.forEach(ld => { if (ld.node >= 0 && ld.node < N) { F[2 * ld.node] += ld.Fx; F[2 * ld.node + 1] += ld.Fy; } });
+  const restr = new Set();
+  TSUP_DOF[T.supports.left].forEach(d => restr.add(2 * G.left + d));
+  TSUP_DOF[T.supports.right].forEach(d => restr.add(2 * G.right + d));
+  const free = []; for (let i = 0; i < nd; i++) if (!restr.has(i)) free.push(i);
+  const n = free.length, A = free.map(r => free.map(c => K[r][c]).concat([F[r]]));
+  let maxd = 0; for (let i = 0; i < nd; i++) maxd = Math.max(maxd, Math.abs(K[i][i]));
+  for (let col = 0; col < n; col++) {
+    let p = col; for (let r = col + 1; r < n; r++) if (Math.abs(A[r][col]) > Math.abs(A[p][col])) p = r;
+    if (Math.abs(A[p][col]) < 1e-9 * maxd) return { error: 'unstable', G };
+    [A[col], A[p]] = [A[p], A[col]];
+    for (let r = 0; r < n; r++) { if (r === col) continue; const f = A[r][col] / A[col][col]; if (f) for (let c = col; c <= n; c++) A[r][c] -= f * A[col][c]; }
+  }
+  const u = new Array(nd).fill(0); free.forEach((d, i) => u[d] = A[i][n] / A[i][i]);
+  const R = d => { if (!restr.has(d)) return 0; let s = -F[d]; for (let j = 0; j < nd; j++) s += K[d][j] * u[j]; return s; };
+  G.bars.forEach(bb => { const N0 = ((u[2 * bb.j] - u[2 * bb.i]) * bb.cx + (u[2 * bb.j + 1] - u[2 * bb.i + 1]) * bb.cy) / bb.l; bb.N = Math.abs(N0) < 1e-9 ? 0 : N0; });
+  const reac = {
+    left: { node: G.left, type: T.supports.left, Rx: R(2 * G.left), Ry: R(2 * G.left + 1) },
+    right: { node: G.right, type: T.supports.right, Rx: R(2 * G.right), Ry: R(2 * G.right + 1) }
+  };
+  return { G, reac };
+}
+// Orden del método de los nudos: cada paso resuelve un nudo con ≤ 2 barras desconocidas
+function jointsOrder(T, sol) {
+  const G = sol.G, known = new Set(), done = new Set(), steps = [];
+  const barsAt = i => G.bars.map((b, k) => ({ b, k })).filter(o => o.b.i === i || o.b.j === i);
+  for (let it = 0; it < G.nodes.length; it++) {
+    let best = -1, bu = 9;
+    G.nodes.forEach((nn, i) => { if (done.has(i)) return; const unk = barsAt(i).filter(o => !known.has(o.k)).length; if (unk >= 1 && unk <= 2 && unk < bu) { best = i; bu = unk; } });
+    if (best < 0) break;
+    const unk = barsAt(best).filter(o => !known.has(o.k)).map(o => o.k);
+    steps.push({ node: best, unknown: unk, knownBefore: new Set(known) });
+    unk.forEach(k => known.add(k)); done.add(best);
+    if (known.size === G.bars.length) break;
+  }
+  return steps;
+}
+
 // ======================= CORE-END =======================
 
 const $ = id => document.getElementById(id);
@@ -595,6 +690,7 @@ function generate() {
 // ---------------- Tablas editables ----------------
 function numIn(path, v, step = 0.5) { return `<input type="number" step="${step}" data-k="${path}" value="${r6(v)}">`; }
 function renderTables() {
+  if (MODE === 'truss') return renderTrussTables();
   if (MODE === 'frame') return renderFrameTables();
   const sTypeSel = (i, t) => `<select data-k="supports.${i}.type">${Object.entries(TYPES).map(([k, n]) => `<option value="${k}" ${k === t ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
   const qTypeSel = (i, t) => `<select data-k="dists.${i}.type">${Object.entries(QTYPES).map(([k, n]) => `<option value="${k}" ${k === t ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
@@ -629,6 +725,7 @@ function normalize(editedKey) {
   });
 }
 $('dataTables').addEventListener('change', e => {
+  if (MODE === 'truss') return trussTableChange(e);
   if (MODE === 'frame') return frameTableChange(e);
   const k = e.target.dataset.k; if (!k) return;
   const parts = k.split('.'); let o = S;
@@ -639,6 +736,7 @@ $('dataTables').addEventListener('change', e => {
   normalize(k); renderTables(); update();
 });
 $('dataTables').addEventListener('click', e => {
+  if (MODE === 'truss') return trussTableClick(e);
   if (MODE === 'frame') return frameTableClick(e);
   const d = e.target.dataset;
   if (d.del) { const [arr, i] = d.del.split('.'); S[arr].splice(+i, 1); }
@@ -794,7 +892,11 @@ function fmtPoly(c) {
 
 // ---------------- Solución ----------------
 function renderSolution() {
-  $('solNwrap').hidden = MODE !== 'frame'; $('mDownLbl').hidden = MODE === 'frame';
+  $('solNwrap').hidden = MODE === 'beam'; $('mDownLbl').hidden = MODE !== 'beam';
+  $('solVwrap').hidden = $('solMwrap').hidden = MODE === 'truss';
+  $('solNT').textContent = MODE === 'truss' ? 'Esfuerzos axiles en las barras' : 'Diagrama de esfuerzos normales N';
+  $('solLawsT').textContent = MODE === 'truss' ? 'Esfuerzos en todas las barras' : 'Leyes de esfuerzos por tramos';
+  if (MODE === 'truss') { $('solQwrap').hidden = true; return renderTrussSolution(); }
   if (MODE === 'frame') { $('solQwrap').hidden = true; return renderFrameSolution(); }
   const sol = solve(S), head = $('solHead'), body = $('solBody');
   const nRv = S.supports.reduce((a, s) => a + (s.type === 'fixed' ? 2 : 1), 0), g = nRv - 2;
@@ -891,7 +993,7 @@ function renderSolution() {
 }
 
 function update() {
-  $('beamSvg').innerHTML = MODE === 'frame' ? drawFrame(SP, null) : drawBeam(S, null);
+  $('beamSvg').innerHTML = MODE === 'truss' ? drawTruss(TR, null) : MODE === 'frame' ? drawFrame(SP, null) : drawBeam(S, null);
   $('solution').hidden = !showSol;
   $('toggleSol').textContent = showSol ? '🙈 Ocultar solución' : '👁 Mostrar solución';
   if (showSol) renderSolution();
@@ -1228,17 +1330,210 @@ function frameDatosHTML() {
   return h + `<p class="note">Signos: en el dintel + hacia arriba; en los pilares + hacia la derecha; momentos + antihorario. Posiciones: x desde B en el dintel, y desde la base en los pilares.</p>`;
 }
 
+// ---------------- CERCHAS (interfaz) ----------------
+let TR = null;
+const tEven = t => t !== 'warren';
+const bName = (G, b) => `N<sub>${b.i + 1}–${b.j + 1}</sub>`;
+const bNameTxt = b => `${b.i + 1}–${b.j + 1}`;
+function generateTruss() {
+  let type = $('tTipo').value; if (type === 'random') type = pick(Object.keys(TTYPES));
+  let n = $('tN').value === 'random' ? (tEven(type) ? pick([4, 4, 6, 6, 8]) : pick([3, 4, 5, 6])) : +$('tN').value;
+  if (tEven(type) && n % 2) n++;
+  const L = $('tLr').checked ? pick([6, 8, 8, 10, 12]) : Math.max(1, +$('tL').value || 8);
+  const roof = type.startsWith('roof');
+  const H = $('tHr').checked ? (roof ? pick([L / 4, L / 3, L / 4]) : pick([1.5, 2, 2, 2.5, 3])) : Math.max(0.5, +$('tH').value || 2);
+  $('tL').value = L; $('tH').value = r6(H);
+  let sp = $('tSup').value; if (sp === 'random') sp = pick(['pin-roller', 'pin-roller', 'roller-pin', 'pin-pin']);
+  const [left, right] = sp.split('-');
+  const T0 = { type, n, L, H: r6(H), supports: { left, right }, loads: [] };
+  const G = trussGeom(T0);
+  const top = G.nodes.map((nd, i) => ({ nd, i })).filter(o => o.nd.chord === 'sup').map(o => o.i);
+  const bot = G.nodes.map((nd, i) => ({ nd, i })).filter(o => o.nd.chord === 'inf' && o.i !== G.left && o.i !== G.right).map(o => o.i);
+  const P = pick([5, 10, 10, 15, 20]);
+  if ($('tAll').checked) top.forEach(i => T0.loads.push({ node: i, Fx: 0, Fy: -P }));
+  else shuffle(Math.random() < 0.75 ? top : top.concat(bot)).slice(0, +$('tnV').value).forEach(i => T0.loads.push({ node: i, Fx: 0, Fy: -pick([5, 10, 15, 20, 25, 30]) }));
+  shuffle(top).slice(0, +$('tnH').value).forEach(i => {
+    const ex = T0.loads.find(l => l.node === i), fx = pick([5, 10]) * (Math.random() < 0.7 ? 1 : -1);
+    if (ex) ex.Fx = fx; else T0.loads.push({ node: i, Fx: fx, Fy: 0 });
+  });
+  T0.loads.sort((a, b) => a.node - b.node);
+  TR = T0; showSol = false; renderTables(); update();
+}
+function normalizeTruss() {
+  TR.L = Math.max(1, TR.L || 1); TR.H = Math.max(0.3, TR.H || 1);
+  TR.n = Math.max(2, Math.min(12, Math.round(TR.n || 2))); if (tEven(TR.type) && TR.n % 2) TR.n++;
+  const nn = trussGeom(TR).nodes.length;
+  TR.loads.forEach(l => { l.node = Math.round(l.node); l.Fx = isFinite(l.Fx) ? l.Fx : 0; l.Fy = isFinite(l.Fy) ? l.Fy : 0; });
+  TR.loads = TR.loads.filter(l => l.node >= 0 && l.node < nn);
+}
+function renderTrussTables() {
+  const G = trussGeom(TR), nn = G.nodes.length;
+  const ni = (p, v, st = 0.5) => `<input type="number" step="${st}" data-tk="${p}" value="${r6(v)}">`;
+  const sel = (p, v, o) => `<select data-tk="${p}">${Object.entries(o).map(([k, t]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  let h = `<div class="row" style="margin:6px 0;gap:16px;flex-wrap:wrap"><span><b>Tipo:</b> ${sel('type', TR.type, TTYPES)}</span><span><b>Paneles:</b> ${ni('n', TR.n, tEven(TR.type) ? 2 : 1)}</span>
+    <span><b>Luz L (m):</b> ${ni('L', TR.L)}</span><span><b>Altura H (m):</b> ${ni('H', TR.H)}</span>
+    <span><b>Apoyo nudo ${G.left + 1}:</b> ${sel('supports.left', TR.supports.left, TSUP)}</span><span><b>Apoyo nudo ${G.right + 1}:</b> ${sel('supports.right', TR.supports.right, TSUP)}</span></div>
+    <div class="note">Cargas en los nudos (numerados en el dibujo, 1 a ${nn}). F<sub>x</sub> + hacia la derecha →, F<sub>y</sub> + hacia arriba ↑.</div>
+    <div class="tables"><div><h4>Cargas en nudos</h4><table><tr><th>Nudo</th><th>F<sub>x</sub> (kN)</th><th>F<sub>y</sub> (kN)</th><th></th></tr>` +
+    TR.loads.map((l, i) => `<tr><td><input type="number" step="1" min="1" max="${nn}" data-tk="loads.${i}.node" value="${l.node + 1}"></td><td>${ni(`loads.${i}.Fx`, l.Fx, 1)}</td><td>${ni(`loads.${i}.Fy`, l.Fy, 1)}</td><td><button class="del" data-tdel="${i}" title="Eliminar">✕</button></td></tr>`).join('') +
+    `</table><button class="mini sec" data-tadd="1">+ carga</button></div></div>`;
+  $('dataTables').innerHTML = h;
+}
+function trussTableChange(e) {
+  const k = e.target.dataset.tk; if (!k) return;
+  const parts = k.split('.'); let o = TR;
+  for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
+  const last = parts[parts.length - 1];
+  let v = e.target.tagName === 'SELECT' ? e.target.value : parseFloat(e.target.value);
+  if (last === 'node') v = v - 1;
+  o[last] = v;
+  normalizeTruss(); renderTrussTables(); update();
+}
+function trussTableClick(e) {
+  const d = e.target.dataset;
+  if (d.tdel !== undefined) TR.loads.splice(+d.tdel, 1);
+  else if (d.tadd) { const G = trussGeom(TR); TR.loads.push({ node: G.nodes.findIndex(nd => nd.chord === 'sup'), Fx: 0, Fy: -10 }); }
+  else return;
+  renderTrussTables(); update();
+}
+function trussXf(T) {
+  const W = 1000, sc = Math.min(780 / T.L, 250 / T.H), ox = (W - T.L * sc) / 2, oy = 120 + T.H * sc;
+  return { W, sc, ox, oy, Hs: oy + 110, X: x => ox + x * sc, Y: y => oy - y * sc };
+}
+// sol = null: enunciado; sol con withN: esfuerzos en barras; withN=false: sólido libre
+function drawTruss(T, sol, withN) {
+  const G = sol ? sol.G : trussGeom(T), tf = trussXf(T), { X, Y, W } = tf;
+  let g = '', lab = '';
+  const maxN = withN ? Math.max(1e-9, ...G.bars.map(b => Math.abs(b.N))) : 1;
+  G.bars.forEach(b => {
+    const a = G.nodes[b.i], c = G.nodes[b.j];
+    if (withN) {
+      const z = Math.abs(b.N) < 1e-6, col = z ? '#90a4ae' : b.N > 0 ? '#1565c0' : '#c62828', w = z ? 2 : 2.5 + 5 * Math.abs(b.N) / maxN;
+      g += `<line x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(c.x)}" y2="${Y(c.y)}" stroke="${col}" stroke-width="${w}" ${z ? 'stroke-dasharray="6 5"' : ''} stroke-linecap="round"/>`;
+      const mx = (X(a.x) + X(c.x)) / 2, my = (Y(a.y) + Y(c.y)) / 2;
+      lab += `<text x="${mx}" y="${my + 4}" text-anchor="middle" font-size="12" font-weight="700" fill="${col}" class="halo">${z ? '0' : fmt(b.N)}</text>`;
+    } else g += `<line x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(c.x)}" y2="${Y(c.y)}" stroke="#546e7a" stroke-width="4" stroke-linecap="round"/>`;
+  });
+  G.nodes.forEach((nd, i) => {
+    g += `<circle cx="${X(nd.x)}" cy="${Y(nd.y)}" r="5" fill="#fff" stroke="#263238" stroke-width="1.8"/>`;
+    const below = nd.chord === 'inf';
+    const isSup = i === G.left || i === G.right;
+    lab += `<text x="${X(nd.x) + (below ? (isSup ? (i === G.left ? -22 : 22) : 0) : -12)}" y="${Y(nd.y) + (below ? (isSup ? 4 : 22) : -10)}" text-anchor="middle" font-size="12" font-weight="700" fill="#37474f" class="halo">${i + 1}</text>`;
+  });
+  // apoyos / reacciones
+  [['left', G.left], ['right', G.right]].forEach(([k, i]) => {
+    const nd = G.nodes[i], cx = X(nd.x), by = Y(nd.y) + 6, t = T.supports[k];
+    if (!sol || withN) {
+      const th = t === 'pin' ? 22 : 15, gy = t === 'pin' ? by + 22 : by + 25;
+      g += `<polygon points="${cx},${by - 2} ${cx - 14},${by + th} ${cx + 14},${by + th}" fill="#eceff1" stroke="#37474f" stroke-width="1.6"/>`;
+      if (t === 'roller') g += `<circle cx="${cx - 7}" cy="${by + 19.5}" r="4" fill="#fff" stroke="#37474f" stroke-width="1.4"/><circle cx="${cx + 7}" cy="${by + 19.5}" r="4" fill="#fff" stroke="#37474f" stroke-width="1.4"/>`;
+      g += `<line x1="${cx - 20}" y1="${gy}" x2="${cx + 20}" y2="${gy}" stroke="#37474f" stroke-width="1.6"/>`;
+      for (let x = cx - 18; x <= cx + 16; x += 7) g += `<line x1="${x}" y1="${gy}" x2="${x - 6}" y2="${gy + 7}" stroke="#37474f" stroke-width="1"/>`;
+    } else {
+      const r = sol.reac[k], gr = '#2e7d32', sd = k === 'left' ? -1 : 1;
+      if (Math.abs(r.Ry) > 1e-9) { const up = r.Ry > 0; g += arrowSvg(cx, up ? by + 60 : by, cx, up ? by : by + 60, gr, 'ah-grn'); lab += `<text x="${cx}" y="${by + 78}" text-anchor="middle" font-size="13" font-weight="600" fill="#1b5e20" class="halo">V${i + 1} = ${fmt(Math.abs(r.Ry))} kN ${up ? '↑' : '↓'}</text>`; }
+      if (Math.abs(r.Rx) > 1e-9) { const rt = r.Rx > 0, x0 = cx + sd * 66, x1 = cx + sd * 7; g += rt === (sd < 0) ? arrowSvg(x0, by - 6, x1, by - 6, gr, 'ah-grn') : arrowSvg(x1, by - 6, x0, by - 6, gr, 'ah-grn'); lab += `<text x="${cx + sd * 66}" y="${by - 14}" text-anchor="${sd < 0 ? 'start' : 'end'}" font-size="13" font-weight="600" fill="#1b5e20" class="halo">H${i + 1} = ${fmt(Math.abs(r.Rx))} kN ${rt ? '→' : '←'}</text>`; }
+    }
+  });
+  // cargas
+  if (!withN) T.loads.forEach(l => {
+    const nd = G.nodes[l.node]; if (!nd) return;
+    const cx = X(nd.x), cy = Y(nd.y);
+    if (Math.abs(l.Fy) > 1e-9) { const dn = l.Fy < 0; g += dn ? arrowSvg(cx, cy - 70, cx, cy - 8, '#c62828', 'ah-red', 2.6) : arrowSvg(cx, cy - 8, cx, cy - 70, '#c62828', 'ah-red', 2.6); lab += `<text x="${cx}" y="${cy - 76}" text-anchor="middle" font-size="12" font-weight="600" fill="#b71c1c" class="halo">${fmt(Math.abs(l.Fy))} kN</text>`; }
+    if (Math.abs(l.Fx) > 1e-9) { const rt = l.Fx > 0; g += rt ? arrowSvg(cx - 64, cy - 14, cx - 8, cy - 14, '#c62828', 'ah-red', 2.6) : arrowSvg(cx + 8, cy - 14, cx + 64, cy - 14, '#c62828', 'ah-red', 2.6); lab += `<text x="${cx + (rt ? -66 : 66)}" y="${cy - 20}" text-anchor="${rt ? 'end' : 'start'}" font-size="12" font-weight="600" fill="#b71c1c" class="halo">${fmt(Math.abs(l.Fx))} kN</text>`; }
+  });
+  // cotas
+  const dimY = Y(0) + (sol && !withN ? 96 : 56), xs = [...new Set(G.nodes.map(nd => r6(nd.x)))].sort((a, b) => a - b);
+  g += `<line x1="${X(0)}" y1="${dimY}" x2="${X(T.L)}" y2="${dimY}" stroke="#78909c"/>`;
+  xs.forEach(x => g += `<line x1="${X(x)}" y1="${dimY - 5}" x2="${X(x)}" y2="${dimY + 5}" stroke="#78909c"/>`);
+  for (let k = 0; k < xs.length - 1; k++) g += `<text x="${(X(xs[k]) + X(xs[k + 1])) / 2}" y="${dimY - 5}" text-anchor="middle" font-size="11" fill="#455a64">${fmt(xs[k + 1] - xs[k])}</text>`;
+  g += `<text x="${(X(0) + X(T.L)) / 2}" y="${dimY + 20}" text-anchor="middle" font-size="13">L = ${fmt(T.L)} m</text>`;
+  const xh = X(T.L) + 40; g += `<line x1="${xh}" y1="${Y(0)}" x2="${xh}" y2="${Y(T.H)}" stroke="#78909c"/><line x1="${xh - 5}" y1="${Y(0)}" x2="${xh + 5}" y2="${Y(0)}" stroke="#78909c"/><line x1="${xh - 5}" y1="${Y(T.H)}" x2="${xh + 5}" y2="${Y(T.H)}" stroke="#78909c"/><text x="${xh + 8}" y="${(Y(0) + Y(T.H)) / 2 + 4}" font-size="13">H = ${fmt(T.H)} m</text>`;
+  if (withN) lab += `<text x="10" y="18" font-size="13" font-weight="700" fill="#37474f">N (kN) · <tspan fill="#1565c0">azul: tracción (+)</tspan> · <tspan fill="#c62828">rojo: compresión (−)</tspan> · <tspan fill="#78909c">gris: barra nula</tspan></text>`;
+  return `<svg viewBox="0 0 ${W} ${tf.Hs + (sol && !withN ? 40 : 0)}" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif">${g}${lab}</svg>`;
+}
+function renderTrussSolution() {
+  const sol = solveTruss(TR), head = $('solHead'), body = $('solBody'), G = sol.G;
+  const j = G.nodes.length, b = G.bars.length, r = TSUP_DOF[TR.supports.left].length + TSUP_DOF[TR.supports.right].length, g = b + r - 2 * j;
+  if (sol.error) { head.innerHTML = `<div class="warn"><b>No se puede resolver.</b> La cercha es un mecanismo con estos apoyos. Usa, por ejemplo, un apoyo fijo y uno móvil.</div>`; body.hidden = true; return; }
+  body.hidden = false;
+  head.innerHTML = `<p>${g === 0 ? '<span class="badge">Cercha isostática</span>' : `<span class="badge h">Cercha hiperestática de grado ${g}</span>`} <span class="note">(b + r = ${b} + ${r} = ${b + r}; 2·n = 2·${j} = ${2 * j}; b = barras, r = reacciones, n = nudos)</span></p>`;
+  $('solFbd').innerHTML = drawTruss(TR, sol, false);
+  const R = sol.reac, Ln = G.left, Rn = G.right, nl = G.nodes[Ln], nr = G.nodes[Rn];
+  const arm = v => v < 0 ? `(${fmt(v)})` : fmt(v);
+  const sj = t => t.length ? t.map((e, k) => (k ? (e.neg ? ' − ' : ' + ') : (e.neg ? '−' : '')) + e.s).join('') : '0';
+  let st = `<h3>Paso 1 · Reacciones (equilibrio global) <span class="note">(+ → y ↑, momentos + antihorario)</span></h3>`;
+  const ext = TR.loads.map(l => ({ ...l, x: G.nodes[l.node].x, y: G.nodes[l.node].y }));
+  const tail = (xO, yO) => { const t = []; ext.forEach(e => { if (Math.abs(e.Fy) > 1e-12) t.push({ neg: e.Fy < 0, s: `${fmt(Math.abs(e.Fy))}·${arm(e.x - xO)}` }); if (Math.abs(e.Fx) > 1e-12) t.push({ neg: -e.Fx < 0, s: `${fmt(Math.abs(e.Fx))}·${arm(e.y - yO)}` }); }); return t.map(e => (e.neg ? ' − ' : ' + ') + e.s).join(''); };
+  const fxs = sj(ext.filter(e => Math.abs(e.Fx) > 1e-12).map(e => ({ neg: e.Fx < 0, s: fmt(Math.abs(e.Fx)) }))), fys = sj(ext.filter(e => Math.abs(e.Fy) > 1e-12).map(e => ({ neg: e.Fy < 0, s: fmt(Math.abs(e.Fy)) })));
+  if (r === 3) {
+    const pinK = TR.supports.left === 'pin' ? 'left' : 'right', rolK = pinK === 'left' ? 'right' : 'left';
+    const pn = G.nodes[R[pinK].node], rn = G.nodes[R[rolK].node], pi = R[pinK].node + 1, ri = R[rolK].node + 1;
+    st += `<div class="eq">ΣM<sub>${pi}</sub> = 0: &nbsp; V<sub>${ri}</sub>·${arm(rn.x - pn.x)}${tail(pn.x, pn.y)} = 0 &nbsp;⇒&nbsp; V<sub>${ri}</sub> = <b>${fmt(R[rolK].Ry)} kN</b></div>
+      <div class="eq">ΣF<sub>y</sub> = 0: &nbsp; V<sub>${pi}</sub> + V<sub>${ri}</sub> + (${fys}) = 0 &nbsp;⇒&nbsp; V<sub>${pi}</sub> = <b>${fmt(R[pinK].Ry)} kN</b></div>
+      <div class="eq">ΣF<sub>x</sub> = 0: &nbsp; H<sub>${pi}</sub> + (${fxs}) = 0 &nbsp;⇒&nbsp; H<sub>${pi}</sub> = <b>${fmt(R[pinK].Rx)} kN</b></div>`;
+  } else st += `<p class="note">Con dos apoyos fijos hay 4 reacciones y 3 ecuaciones: las reacciones horizontales dependen de la deformación de las barras. Se ha resuelto con el método de rigidez (EA igual en todas las barras).</p>`;
+  // método de los nudos
+  if (g === 0) {
+    const steps = jointsOrder(TR, sol);
+    st += `<h3>Paso 2 · Método de los nudos</h3><p class="note" style="margin:0 0 6px">En cada nudo se supone que las barras desconocidas trabajan a tracción (tiran del nudo). Si sale negativo, la barra está comprimida.</p>`;
+    steps.forEach(sp => {
+      const i = sp.node, nd = G.nodes[i];
+      const bs = G.bars.map((bb, k) => ({ bb, k })).filter(o => o.bb.i === i || o.bb.j === i);
+      const tx = [], ty = [];
+      bs.forEach(({ bb, k }) => {
+        const o = G.nodes[bb.i === i ? bb.j : bb.i], l = Math.hypot(o.x - nd.x, o.y - nd.y), c = (o.x - nd.x) / l, s = (o.y - nd.y) / l;
+        const nm = sp.knownBefore.has(k) ? `(${fmt(bb.N)})` : bName(G, bb);
+        if (Math.abs(c) > 1e-9) tx.push({ neg: c < 0, s: `${nm}·${fmt(Math.abs(c), 3)}` });
+        if (Math.abs(s) > 1e-9) ty.push({ neg: s < 0, s: `${nm}·${fmt(Math.abs(s), 3)}` });
+      });
+      let fx = 0, fy = 0;
+      TR.loads.filter(l => l.node === i).forEach(l => { fx += l.Fx; fy += l.Fy; });
+      ['left', 'right'].forEach(k => { if (R[k].node === i) { fx += R[k].Rx; fy += R[k].Ry; } });
+      if (Math.abs(fx) > 1e-9) tx.push({ neg: fx < 0, s: fmt(Math.abs(fx)) });
+      if (Math.abs(fy) > 1e-9) ty.push({ neg: fy < 0, s: fmt(Math.abs(fy)) });
+      const res = sp.unknown.map(k => { const bb = G.bars[k]; return `${bName(G, bb)} = <b>${fmt(bb.N)}</b> ${Math.abs(bb.N) < 1e-6 ? '(nula)' : bb.N > 0 ? '(T)' : '(C)'}`; }).join(', &nbsp;');
+      st += `<div class="eq"><b>Nudo ${i + 1}</b>: &nbsp; ΣF<sub>x</sub>: ${sj(tx)} = 0 &nbsp;·&nbsp; ΣF<sub>y</sub>: ${sj(ty)} = 0 &nbsp;⇒&nbsp; ${res}</div>`;
+    });
+  }
+  let cx = R.left.Rx + R.right.Rx, cy = R.left.Ry + R.right.Ry; ext.forEach(e => { cx += e.Fx; cy += e.Fy; });
+  st += `<div class="eq">Comprobación global: &nbsp; ΣF<sub>x</sub> = ${fmt(cx, 4)} · ΣF<sub>y</sub> = ${fmt(cy, 4)} &nbsp; ${Math.abs(cx) + Math.abs(cy) < 1e-6 ? '<span class="ok">✔ equilibrio</span>' : '⚠'}</div>`;
+  $('solSteps').innerHTML = st;
+  const rc = (v, pos, neg) => Math.abs(v) < 1e-9 ? '0' : `<b>${fmt(Math.abs(v))}</b> ${v > 0 ? pos : neg}`;
+  $('solReac').innerHTML = `<table><tr><th>Nudo</th><th>Tipo</th><th>Horizontal H</th><th>Vertical V</th></tr>` +
+    ['left', 'right'].map(k => `<tr><td><b>${R[k].node + 1}</b></td><td>${TSUP[R[k].type]}</td><td>${R[k].type === 'pin' ? rc(R[k].Rx, 'kN →', 'kN ←') : '—'}</td><td>${rc(R[k].Ry, 'kN ↑', 'kN ↓')}</td></tr>`).join('') + `</table>`;
+  $('solN').innerHTML = drawTruss(TR, sol, true);
+  const tens = G.bars.reduce((a, bb) => bb.N > a.N ? bb : a), comp = G.bars.reduce((a, bb) => bb.N < a.N ? bb : a), zeros = G.bars.filter(bb => Math.abs(bb.N) < 1e-6);
+  $('solExt').innerHTML = `<table class="extr"><tr><th>Magnitud</th><th>Valor</th><th>Barra</th></tr>
+    <tr><td>Máxima tracción</td><td>${tens.N > 1e-6 ? fmt(tens.N) + ' kN' : '—'}</td><td>${tens.N > 1e-6 ? bNameTxt(tens) + ' (' + tens.kind + ')' : '—'}</td></tr>
+    <tr><td>Máxima compresión</td><td>${comp.N < -1e-6 ? fmt(comp.N) + ' kN' : '—'}</td><td>${comp.N < -1e-6 ? bNameTxt(comp) + ' (' + comp.kind + ')' : '—'}</td></tr>
+    <tr><td>Barras nulas</td><td>${zeros.length}</td><td>${zeros.map(bNameTxt).join(', ') || '—'}</td></tr></table>`;
+  $('solLaws').innerHTML = `<table><tr><th>Barra</th><th>Tipo</th><th>Longitud (m)</th><th>N (kN)</th><th>Trabajo</th></tr>` +
+    G.bars.map(bb => `<tr><td><b>${bNameTxt(bb)}</b></td><td>${bb.kind}</td><td>${fmt(bb.l)}</td><td style="color:${Math.abs(bb.N) < 1e-6 ? '#78909c' : bb.N > 0 ? '#1565c0' : '#c62828'};font-weight:600">${fmt(bb.N)}</td><td>${Math.abs(bb.N) < 1e-6 ? 'nula' : bb.N > 0 ? 'tracción' : 'compresión'}</td></tr>`).join('') + `</table>`;
+}
+function trussDatosHTML() {
+  const G = trussGeom(TR);
+  return `<p><b>Tipo:</b> ${TTYPES[TR.type]} · <b>Paneles:</b> ${TR.n} · <b>Luz:</b> L = ${fmt(TR.L)} m · <b>Altura:</b> H = ${fmt(TR.H)} m · <b>Apoyos:</b> nudo ${G.left + 1} ${TSUP[TR.supports.left].toLowerCase()}, nudo ${G.right + 1} ${TSUP[TR.supports.right].toLowerCase()}</p>` +
+    (TR.loads.length ? `<table><tr><th>Nudo</th><th>F<sub>x</sub> (kN)</th><th>F<sub>y</sub> (kN)</th></tr>` + TR.loads.map(l => `<tr><td>${l.node + 1}</td><td>${fmt(l.Fx)}</td><td>${fmt(l.Fy)}</td></tr>`).join('') + `</table>` : '') +
+    `<p class="note">F<sub>x</sub> + hacia la derecha, F<sub>y</sub> + hacia arriba.</p>`;
+}
+
+$('tTipo').innerHTML = `<option value="random">Aleatoria</option>` + Object.entries(TTYPES).map(([k, t]) => `<option value="${k}">${t}</option>`).join('');
+$('tN').innerHTML = `<option value="random">Aleatorio</option>` + [2, 3, 4, 5, 6, 8].map(v => `<option value="${v}">${v}</option>`).join('');
+fillSel($('tnV'), 0, 6, 3); fillSel($('tnH'), 0, 2, 0);
 let MODE = 'beam';
 function setMode(m) {
   MODE = m;
   try { localStorage.setItem('vigasMode', m); } catch (e) {}
   document.querySelectorAll('.mode button').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
-  $('cfgBeam').hidden = m === 'frame'; $('cfgFrame').hidden = m !== 'frame';
-  $('cfgMode').textContent = m === 'frame' ? '· pórtico' : '· viga';
-  document.querySelector('#tEnun h2').textContent = m === 'frame' ? '2. Enunciado · pórtico' : '2. Enunciado · viga';
-  const tb = 'Problema de vigas: cortantes y flectores', tp = 'Problema de pórticos: normales, cortantes y flectores';
-  if ([tb, tp].includes($('rTitle').value)) $('rTitle').value = m === 'frame' ? tp : tb;
+  $('cfgBeam').hidden = m !== 'beam'; $('cfgFrame').hidden = m !== 'frame'; $('cfgTruss').hidden = m !== 'truss';
+  const nm = { beam: 'viga', frame: 'pórtico', truss: 'cercha' }[m];
+  $('cfgMode').textContent = '· ' + nm;
+  document.querySelector('#tEnun h2').textContent = '2. Enunciado · ' + nm;
+  const tt = { beam: 'Problema de vigas: cortantes y flectores', frame: 'Problema de pórticos: normales, cortantes y flectores', truss: 'Problema de cerchas: esfuerzos axiles' };
+  if (Object.values(tt).includes($('rTitle').value)) $('rTitle').value = tt[m];
   if (m === 'frame' && !SP) { generateFrame(); return; }
+  if (m === 'truss' && !TR) { generateTruss(); return; }
   showSol = false; renderTables(); update();
 }
 function buildFQ(n, box, cls) { const b = $(box), prev = [...b.querySelectorAll('select')].map(x => x.value); b.innerHTML = ''; for (let i = 0; i < +$(n).value; i++) { b.insertAdjacentHTML('beforeend', `<div class="row"><span>q${i + 1}</span><select class="${cls}"><option value="random">Aleatorio</option>${Object.entries(QTYPES).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></div>`); b.lastElementChild.querySelector('select').value = prev[i] || 'uniform'; } }
@@ -1308,13 +1603,13 @@ function datosHTML() {
 function reportDoc(withToolbar) {
   const o = id => $(id).checked;
   renderSolution();
-  const sol = MODE === 'frame' ? solveFrame(SP) : solve(S), ok = !sol.error;
+  const sol = MODE === 'truss' ? solveTruss(TR) : MODE === 'frame' ? solveFrame(SP) : solve(S), ok = !sol.error;
   const title = $('rTitle').value.trim() || 'Informe de viga';
   const date = $('rDate').value ? new Date($('rDate').value + 'T12:00').toLocaleDateString('es-ES') : '';
   let b = `<div class="rh"><h1>${esc(title)}</h1><div class="meta">${$('rName').value.trim() ? `<span><b>Alumno/a:</b> ${esc($('rName').value)}</span>` : ''}${date ? `<span><b>Fecha:</b> ${date}</span>` : ''}</div></div>`;
-  if (o('rEnun') || o('rDatos')) b += `<h2>Enunciado</h2><p class="note" style="margin:0 0 6px">${MODE === 'frame' ? 'Calcular las reacciones y dibujar los diagramas de esfuerzos normales, cortantes y momentos flectores del pórtico.' : 'Calcular las reacciones y dibujar los diagramas de esfuerzos cortantes y momentos flectores de la viga.'}</p>`;
-  if (o('rEnun')) b += MODE === 'frame' ? drawFrame(SP, null) : drawBeam(S, null);
-  if (o('rDatos')) b += MODE === 'frame' ? frameDatosHTML() : datosHTML();
+  if (o('rEnun') || o('rDatos')) b += `<h2>Enunciado</h2><p class="note" style="margin:0 0 6px">${MODE === 'truss' ? 'Calcular las reacciones y los esfuerzos axiles de todas las barras de la cercha, indicando si trabajan a tracción o a compresión.' : MODE === 'frame' ? 'Calcular las reacciones y dibujar los diagramas de esfuerzos normales, cortantes y momentos flectores del pórtico.' : 'Calcular las reacciones y dibujar los diagramas de esfuerzos cortantes y momentos flectores de la viga.'}</p>`;
+  if (o('rEnun')) b += MODE === 'truss' ? drawTruss(TR, null) : MODE === 'frame' ? drawFrame(SP, null) : drawBeam(S, null);
+  if (o('rDatos')) b += MODE === 'truss' ? trussDatosHTML() : MODE === 'frame' ? frameDatosHTML() : datosHTML();
   if (o('rCrit')) b += `<h3>Criterio de signos</h3><ul>${$('critList').innerHTML}</ul>`;
   if ($('rNotes').value.trim()) b += `<h3>Observaciones</h3><div class="notes">${esc($('rNotes').value)}</div>`;
   if (o('rSpace')) b += `<div class="space">Resolución:</div>`;
@@ -1324,12 +1619,11 @@ function reportDoc(withToolbar) {
     add('rFbd', 'Diagrama de sólido libre', $('solFbd').innerHTML);
     add('rSteps', 'Planteamiento y ecuaciones de equilibrio', $('solSteps').innerHTML);
     add('rReac', 'Reacciones', $('solReac').innerHTML);
-    if (MODE === 'frame') add('rN', 'Diagrama de esfuerzos normales N', $('solN').innerHTML);
-    if (MODE !== 'frame' && validDists(S).length) add('rQ', 'Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia arriba)</span>', $('solQ').innerHTML);
-    add('rV', 'Diagrama de esfuerzos cortantes V(x)', $('solV').innerHTML);
-    add('rM', 'Diagrama de momentos flectores M(x)', $('solM').innerHTML);
+    if (MODE !== 'beam') add('rN', $('solNT').textContent, $('solN').innerHTML);
+    if (MODE === 'beam' && validDists(S).length) add('rQ', 'Diagrama de cargas distribuidas q(x) <span class="note">(+ hacia arriba)</span>', $('solQ').innerHTML);
+    if (MODE !== 'truss') { add('rV', 'Diagrama de esfuerzos cortantes V(x)', $('solV').innerHTML); add('rM', 'Diagrama de momentos flectores M(x)', $('solM').innerHTML); }
     add('rExt', 'Valores máximos', $('solExt').innerHTML);
-    add('rLaws', 'Leyes de esfuerzos por tramos', $('solLaws').innerHTML);
+    add('rLaws', $('solLawsT').textContent, $('solLaws').innerHTML);
   }
   if (parts.length || !ok) b += `<h2 class="${o('rNewPage') && (o('rEnun') || o('rDatos')) ? 'newpage' : ''}">Solución</h2>${$('solHead').innerHTML}` + parts.join('');
   const tb = withToolbar ? `<div class="toolbar"><button onclick="window.print()">💾 Guardar PDF / Imprimir</button><span style="font-size:.9rem">En el diálogo elige «Guardar como PDF».</span></div>` : '';
@@ -1358,7 +1652,7 @@ $('rOpen').onclick = () => {
   if (!w) { alert('El navegador ha bloqueado la ventana. Permite las ventanas emergentes para esta página.'); return; }
   w.document.open(); w.document.write(reportDoc(true)); w.document.close();
 };
-$('gen').onclick = () => { MODE === 'frame' ? generateFrame() : generate(); showTab('tEnun'); };
+$('gen').onclick = () => { MODE === 'truss' ? generateTruss() : MODE === 'frame' ? generateFrame() : generate(); showTab('tEnun'); };
 $('toggleSol').onclick = () => { showSol = !showSol; update(); };
 $('mDown').onchange = update;
 $('printBtn').onclick = () => window.print();
