@@ -94,7 +94,7 @@
   <img src="icons/icon-192.png" alt="">
   <h1>Vigas, pórticos y cerchas · Esfuerzos</h1>
   <div class="mode" role="group" aria-label="Tipo de estructura"><button data-mode="beam" title="Viga">▬ Viga</button><button data-mode="frame" title="Pórtico">⊓ Pórtico</button><button data-mode="truss" title="Cercha">△ Cercha</button></div>
-  <span id="ver" style="font-size:.85rem;opacity:.85">v3.2 · 15-11-2026</span>
+  <span id="ver" style="font-size:.85rem;opacity:.85">v3.3 · 15-11-2026</span>
   <button id="installBtn" hidden>⬇ Instalar app</button>
   <button id="printBtn" class="noprint">🖨 Imprimir</button>
 </header>
@@ -1414,7 +1414,7 @@ function generateTruss() {
     const ds = T0.bars.map((bb, k) => ({ bb, k })).filter(o => o.bb.kind === 'diagonal');
     if (ds.length) T0.bars.splice(pick(ds).k, 1);
   }
-  TR = T0; showSol = false; renderTables(); update();
+  TR = T0; ritIdx = null; showSol = false; renderTables(); update();
 }
 function normalizeTruss(key) {
   if (key === 'type' || key === 'n') TR.bars = null;
@@ -1564,6 +1564,7 @@ function renderTrussSolution() {
       st += `<div class="eq"><b>Nudo ${i + 1}</b>: &nbsp; ΣF<sub>x</sub>: ${sj(tx)} = 0 &nbsp;·&nbsp; ΣF<sub>y</sub>: ${sj(ty)} = 0 &nbsp;⇒&nbsp; ${res}</div>`;
     });
   }
+  if (g === 0) st += `<h3>Paso 3 · Método de Ritter (secciones)</h3><div id="ritBox">${ritterHTML(TR, sol)}</div>`;
   let cx = R.left.Rx + R.right.Rx, cy = R.left.Ry + R.right.Ry; ext.forEach(e => { cx += e.Fx; cy += e.Fy; });
   st += `<div class="eq">Comprobación global: &nbsp; ΣF<sub>x</sub> = ${fmt(cx, 4)} · ΣF<sub>y</sub> = ${fmt(cy, 4)} &nbsp; ${Math.abs(cx) + Math.abs(cy) < 1e-6 ? '<span class="ok">✔ equilibrio</span>' : '⚠'}</div>`;
   $('solSteps').innerHTML = st;
@@ -1579,6 +1580,89 @@ function renderTrussSolution() {
   $('solLaws').innerHTML = `<table><tr><th>Barra</th><th>Tipo</th><th>Longitud (m)</th><th>N (kN)</th><th>Trabajo</th></tr>` +
     G.bars.map(bb => `<tr><td><b>${bNameTxt(bb)}</b></td><td>${bb.kind}</td><td>${fmt(bb.l)}</td><td style="color:${Math.abs(bb.N) < 1e-6 ? '#78909c' : bb.N > 0 ? '#1565c0' : '#c62828'};font-weight:600">${fmt(bb.N)}</td><td>${Math.abs(bb.N) < 1e-6 ? 'nula' : bb.N > 0 ? 'tracción' : 'compresión'}</td></tr>`).join('') + `</table>`;
 }
+// ---------------- Método de Ritter (secciones) ----------------
+let ritIdx = null;
+function ritterSections(sol) {
+  const G = sol.G, xs = [...new Set(G.nodes.map(n => r6(n.x)))].sort((a, b) => a - b), out = [];
+  for (let k = 0; k < xs.length - 1; k++) {
+    const xc = (xs[k] + xs[k + 1]) / 2;
+    const cut = G.bars.map((b, i) => ({ b, i })).filter(o => { const a = G.nodes[o.b.i].x, c = G.nodes[o.b.j].x; return Math.min(a, c) < xc - 1e-9 && Math.max(a, c) > xc + 1e-9; });
+    out.push({ xc, x1: xs[k], x2: xs[k + 1], cut });
+  }
+  return out;
+}
+function lineInt(G, b1, b2) {
+  const p = G.nodes[b1.i], r = [G.nodes[b1.j].x - p.x, G.nodes[b1.j].y - p.y], q = G.nodes[b2.i], s = [G.nodes[b2.j].x - q.x, G.nodes[b2.j].y - q.y];
+  const den = r[0] * s[1] - r[1] * s[0];
+  if (Math.abs(den) < 1e-9 * Math.hypot(...r) * Math.hypot(...s)) return null;
+  const t = ((q.x - p.x) * s[1] - (q.y - p.y) * s[0]) / den;
+  return { x: p.x + t * r[0], y: p.y + t * r[1] };
+}
+function ritterHTML(T, sol) {
+  const G = sol.G, secs = ritterSections(sol), ok = secs.map((s, i) => ({ s, i })).filter(o => o.s.cut.length === 3);
+  if (!ok.length) return `<p class="note">No hay ninguna sección vertical que corte exactamente 3 barras: el método de Ritter no se puede aplicar directamente.</p>`;
+  if (ritIdx === null || !ok.some(o => o.i === ritIdx)) ritIdx = ok[Math.floor(ok.length / 2)].i;
+  const sec = secs[ritIdx], xc = sec.xc;
+  let h = `<div class="row" style="margin:4px 0 8px"><b>Sección:</b> <select id="ritSel">${secs.map((s, i) => `<option value="${i}" ${i === ritIdx ? 'selected' : ''} ${s.cut.length !== 3 ? 'disabled' : ''}>entre x = ${fmt(s.x1)} y x = ${fmt(s.x2)} m${s.cut.length !== 3 ? ` (corta ${s.cut.length} barras)` : ''}</option>`).join('')}</select>
+    <span class="note">Se estudia la parte izquierda. Las barras cortadas se suponen a tracción (tiran hacia el corte).</span></div>`;
+  // fuerzas exteriores en la parte izquierda
+  const ext = [];
+  T.loads.forEach(l => { const n = G.nodes[l.node]; if (n && n.x < xc) ext.push({ x: n.x, y: n.y, Fx: l.Fx, Fy: l.Fy, lab: `nudo ${l.node + 1}` }); });
+  ['left', 'right'].forEach(k => { const r = sol.reac[k], n = G.nodes[r.node]; if (n.x < xc) ext.push({ x: n.x, y: n.y, Fx: r.Rx, Fy: r.Ry, lab: `reacción ${r.node + 1}` }); });
+  const arm = v => v < 0 ? `(${fmt(v)})` : fmt(v);
+  const sj = t => t.length ? t.map((e, k) => (k ? (e.neg ? ' − ' : ' + ') : (e.neg ? '−' : '')) + e.s).join('') : '0';
+  const pts = [];
+  sec.cut.forEach(({ b, i }) => {
+    const others = sec.cut.filter(o => o.i !== i), P = lineInt(G, others[0].b, others[1].b);
+    const ln = G.nodes[b.i].x < xc ? b.i : b.j, rn = ln === b.i ? b.j : b.i, A = G.nodes[ln], B = G.nodes[rn];
+    const l = Math.hypot(B.x - A.x, B.y - A.y), u = [(B.x - A.x) / l, (B.y - A.y) / l], nm = `N<sub>${b.i + 1}–${b.j + 1}</sub>`;
+    let eq, Nr;
+    if (P) {
+      const pi = G.nodes.findIndex(n => Math.hypot(n.x - P.x, n.y - P.y) < 1e-6);
+      const pl = pi >= 0 ? `nudo ${pi + 1}` : `punto (${fmt(P.x)}; ${fmt(P.y)})`;
+      const d = (A.x - P.x) * u[1] - (A.y - P.y) * u[0];
+      const t = []; let sm = 0;
+      ext.forEach(e => {
+        if (Math.abs(e.Fy) > 1e-9 && Math.abs(e.x - P.x) > 1e-9) { t.push({ neg: e.Fy * (e.x - P.x) < 0, s: `${fmt(Math.abs(e.Fy))}·${fmt(Math.abs(e.x - P.x))}` }); sm += e.Fy * (e.x - P.x); }
+        if (Math.abs(e.Fx) > 1e-9 && Math.abs(e.y - P.y) > 1e-9) { t.push({ neg: -e.Fx * (e.y - P.y) < 0, s: `${fmt(Math.abs(e.Fx))}·${fmt(Math.abs(e.y - P.y))}` }); sm += -e.Fx * (e.y - P.y); }
+      });
+      Nr = Math.abs(d) < 1e-12 ? NaN : -sm / d;
+      pts.push({ P, lab: `O<sub>${b.i + 1}–${b.j + 1}</sub>`, txt: `O${b.i + 1}–${b.j + 1}` });
+      eq = `ΣM<sub>${pl}</sub> = 0 (antihorario +): &nbsp; ${nm}·${arm(d)}${t.length ? ' ' + (t[0].neg ? '− ' : '+ ') + sj(t).replace(/^−/, '') : ''} = 0`;
+      eq = `<b>Barra ${b.i + 1}–${b.j + 1}</b> &nbsp;·&nbsp; punto de Ritter: ${pl} <span class="note">(corte de las otras dos barras)</span><br>${eq} &nbsp;⇒&nbsp; ${nm} = <b>${fmt(Nr)} kN</b> ${Math.abs(Nr) < 1e-6 ? '(nula)' : Nr > 0 ? '(T)' : '(C)'}`;
+    } else {
+      const o = others[0].b, ov = [G.nodes[o.j].x - G.nodes[o.i].x, G.nodes[o.j].y - G.nodes[o.i].y], ol = Math.hypot(...ov), n = [-ov[1] / ol, ov[0] / ol];
+      const vert = Math.abs(n[0]) < 1e-9, nn = vert ? [0, 1] : (n[1] < 0 ? [-n[0], -n[1]] : n);
+      const cu = u[0] * nn[0] + u[1] * nn[1];
+      const t = []; let sm = 0;
+      ext.forEach(e => { const v = e.Fx * nn[0] + e.Fy * nn[1]; if (Math.abs(v) > 1e-9) { t.push({ neg: v < 0, s: fmt(Math.abs(v)) }); sm += v; } });
+      Nr = -sm / cu;
+      const dir = vert ? 'ΣF<sub>y</sub> = 0' : 'ΣF perpendicular a las otras dos barras = 0';
+      eq = `<b>Barra ${b.i + 1}–${b.j + 1}</b> &nbsp;·&nbsp; las otras dos barras son paralelas (no se cortan): se usa ${dir}<br>${dir}: &nbsp; ${nm}·${arm(cu)}${t.length ? ' ' + (t[0].neg ? '− ' : '+ ') + sj(t).replace(/^−/, '') : ''} = 0 &nbsp;⇒&nbsp; ${nm} = <b>${fmt(Nr)} kN</b> ${Math.abs(Nr) < 1e-6 ? '(nula)' : Nr > 0 ? '(T)' : '(C)'}`;
+    }
+    const chk = Math.abs(Nr - b.N) < 1e-4 * Math.max(1, Math.abs(b.N));
+    h += `<div class="eq">${eq} &nbsp;${chk ? '<span class="ok">✔ coincide</span>' : '⚠ ' + fmt(b.N)}</div>`;
+  });
+  // dibujo
+  const tf = trussXf(T); let { X, Y } = tf;
+  let g = '', lab = '';
+  G.bars.forEach(b => {
+    const a = G.nodes[b.i], c = G.nodes[b.j], isCut = sec.cut.some(o => o.b === b), leftSide = Math.max(a.x, c.x) <= xc;
+    g += `<line x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(c.x)}" y2="${Y(c.y)}" stroke="${isCut ? '#ef6c00' : leftSide ? '#455a64' : '#cfd8dc'}" stroke-width="${isCut ? 6 : 3.5}" stroke-linecap="round"/>`;
+  });
+  sec.cut.forEach(({ b }) => {          // prolongación de las barras cortadas hasta los puntos de Ritter
+    const a = G.nodes[b.i], c = G.nodes[b.j];
+    pts.forEach(p => { const crossv = (c.x - a.x) * (p.P.y - a.y) - (c.y - a.y) * (p.P.x - a.x); if (Math.abs(crossv) < 1e-6 * Math.hypot(c.x - a.x, c.y - a.y)) { const far = Math.hypot(p.P.x - a.x, p.P.y - a.y) > Math.hypot(p.P.x - c.x, p.P.y - c.y) ? a : c; g += `<line x1="${X(far.x)}" y1="${Y(far.y)}" x2="${X(p.P.x)}" y2="${Y(p.P.y)}" stroke="#7b1fa2" stroke-width="1.2" stroke-dasharray="5 4"/>`; } });
+  });
+  G.nodes.forEach((n, i) => { g += `<circle cx="${X(n.x)}" cy="${Y(n.y)}" r="4.5" fill="#fff" stroke="${n.x < xc ? '#263238' : '#b0bec5'}" stroke-width="1.6"/>`; lab += `<text x="${X(n.x) - 10}" y="${Y(n.y) - 9}" font-size="11" font-weight="700" fill="${n.x < xc ? '#37474f' : '#b0bec5'}" class="halo">${i + 1}</text>`; });
+  g += `<line x1="${X(xc)}" y1="${Y(T.H) - 30}" x2="${X(xc)}" y2="${Y(0) + 30}" stroke="#ef6c00" stroke-width="2" stroke-dasharray="8 5"/>`;
+  lab += `<text x="${X(xc)}" y="${Y(T.H) - 36}" text-anchor="middle" font-size="13" font-weight="700" fill="#e65100">corte</text>`;
+  pts.forEach((p, k) => { g += `<circle cx="${X(p.P.x)}" cy="${Y(p.P.y)}" r="6" fill="#7b1fa2"/>`; lab += `<text x="${X(p.P.x) + 9}" y="${Y(p.P.y) + 18 + k * 2}" font-size="12" font-weight="700" fill="#6a1b9a" class="halo">${p.txt}</text>`; });
+  const xsP = pts.map(p => X(p.P.x)), ysP = pts.map(p => Y(p.P.y));
+  const minX = Math.min(0, ...xsP) - 20, maxX = Math.max(tf.W, ...xsP) + 40, minY = Math.min(0, ...ysP) - 20, maxY = Math.max(tf.Hs - 40, ...ysP) + 30;
+  return h.replace('<div class="eq">', `<svg viewBox="${minX} ${minY} ${maxX - minX} ${maxY - minY}" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif" style="max-height:420px">${g}${lab}</svg><div class="eq">`);
+}
+
 function trussDatosHTML() {
   const G = trussModel(TR);
   return `<p><b>Tipo:</b> ${TTYPES[TR.type]} · <b>Paneles:</b> ${TR.n} · <b>Barras:</b> b = ${G.bars.length} · <b>Nudos:</b> n = ${G.nodes.length} · <b>Luz:</b> L = ${fmt(TR.L)} m · <b>Altura:</b> H = ${fmt(TR.H)} m · <b>Apoyos:</b> nudo ${G.left + 1} ${TSUP[TR.supports.left].toLowerCase()}, nudo ${G.right + 1} ${TSUP[TR.supports.right].toLowerCase()}</p>` +
@@ -1589,6 +1673,7 @@ function trussDatosHTML() {
 $('tTipo').innerHTML = `<option value="random">Aleatoria</option>` + Object.entries(TTYPES).map(([k, t]) => `<option value="${k}">${t}</option>`).join('');
 $('tN').innerHTML = `<option value="random">Aleatorio</option>` + [2, 3, 4, 5, 6, 8].map(v => `<option value="${v}">${v}</option>`).join('');
 fillSel($('tnV'), 0, 6, 3); fillSel($('tnH'), 0, 2, 0);
+$('solSteps').addEventListener('change', e => { if (e.target.id === 'ritSel') { ritIdx = +e.target.value; $('ritBox').innerHTML = ritterHTML(TR, solveTruss(TR)); } });
 let MODE = 'beam';
 function setMode(m) {
   MODE = m;
